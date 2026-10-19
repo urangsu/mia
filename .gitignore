@@ -1,0 +1,42 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.codex-tools/
+.DS_Store
+node_modules/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.sqlite*
+*.db
+*.xlsx
+*.xlsm
+*.xls
+*.csv
+*.pptx
+*.pdf
+*.zip
+*.log
+config.json
+*diagnostic*.json
+*diagnosis*.json
+*binding*.json
+*sync_plan*.json
+*sync_result*.json
+*.fm37-state.json
+verification*/
+artifacts/
+reports/
+backups/
+ChromeProfile*/
+**/User Data/
+**/Cookies
+**/Login Data
+**/Local State
+**/Network/
+ecm_document_binding.json
+warm_benchmark_*.json
+evidence_*.json
