@@ -15,9 +15,15 @@ import re
 
 MANAGED=('RawData','Daily','Latest','일별시세','일별요약','월별시세','월별건수','가격열설정','환율원본','수집현황',
          '워크스페이스원본','보고용_금속시세','보고용_환율','보고용_시장지표','증시_시총스냅샷','보고용_시총','보고용_종합',
-         'NAVER_시총원본','NAVER_지표원본','보고서_메타')
+         'NAVER_시총원본','NAVER_지표원본','보고서_메타','보류셀')
 
 class SecureExcelError(RuntimeError):pass
+
+
+def quarantined_cells(sheets, tab):
+    """Explicit invalidations only; ordinary missing history never clears cells."""
+    return [(row[1],row[2]) for row in sheets.get('보류셀',[])[1:]
+            if len(row)>=3 and row[0]==tab]
 
 
 def is_plain_xlsx(path):
@@ -289,7 +295,8 @@ def write_com_sheets(path:Path, sheets:dict[str,list[tuple]], *, active='일별�
             try:
                 report_plans[tab]=build_plan(sheets[tab],sheets['가격열설정'],
                     oldrows,old_catalog_rows,date1904=bool(wb.Date1904),
-                    period_type='monthly' if tab.startswith('월별') else 'daily')
+                    period_type='monthly' if tab.startswith('월별') else 'daily',
+                    clear_cells=quarantined_cells(sheets,tab))
             except ECMBlocked as exc:
                 raise SecureExcelError(f'{tab}: 기존 열/일자 매핑 불명확. 원본 미변경: {exc}') from exc
             if logger:
@@ -407,8 +414,11 @@ def write_com_sheets(path:Path, sheets:dict[str,list[tuple]], *, active='일별�
                         raise SecureExcelError(f'Excel 재검증 실패: {name} 신규 일자/기준월 {info["date"]!r}')
                 for e in plan['edits']:
                     actual=ws.Cells(e['row'],e['col']).Value2
-                    try:match=abs(float(actual)-float(e['incoming']))<=max(1e-8,abs(float(e['incoming']))*1e-9)
-                    except (TypeError,ValueError):match=False
+                    if e['incoming'] is None:
+                        match=actual in (None,'')
+                    else:
+                        try:match=abs(float(actual)-float(e['incoming']))<=max(1e-8,abs(float(e['incoming']))*1e-9)
+                        except (TypeError,ValueError):match=False
                     if not match:raise SecureExcelError(f'Excel 재검증 실패: {name} {e["row"]}행/{e["col"]}열 값 불일치')
                 continue
             if rows and len(rows)>2 and name in ('일별시세','일별요약','월별시세','월별건수'):
@@ -477,9 +487,11 @@ def make_sheets(prices, latest, fx_quotes, aliases=None):
         for p in prices if p.price_mode in ('Actual','Unspecified') and not p.period_label]
     sheet['Latest']=[('symbol','description','date','low','mid','high','unit','change_pct','price_mode','freshness','widget','source')]+[
         tuple(r.get(k) for k in ('symbol','description','date','low','mid','high','unit','change_pct','price_mode','freshness','widget','source')) for r in latest]
-    issues=[]
-    records=prepare_excel_series(prices,fx_quotes,issues=issues)
+    issues=[];quarantined=[]
+    records=prepare_excel_series(prices,fx_quotes,issues=issues,quarantined=quarantined)
     available={k for r in records.values() for k in r}
+    # Preserve series identity even if every observation is currently withheld.
+    available.update(k for _,k,_ in quarantined)
     # The reporting view has exactly one price column (MID) per FMB series.
     # LOW/HIGH stay in SQLite and RawData, never in the daily/monthly report.
     fixed=[f'FX_{c}_KRW_per_{QUOTE_UNITS[c]}' for c in FX_CODES if f'FX_{c}_KRW_per_{QUOTE_UNITS[c]}' in available]
@@ -506,21 +518,31 @@ def make_sheets(prices, latest, fx_quotes, aliases=None):
     def two_headers(time_key):
         return [tuple([time_key]+[labels[k] for k in keys]),
                 tuple(['']+[report_series_source(k) for k in keys])]
-    report_dates=sorted(dt for dt,items in records.items() if any(k in items for k in keys))
+    report_dates=sorted({dt for dt,items in records.items() if any(k in items for k in keys)} |
+                        {dt for dt,k,_ in quarantined if k in keys})
     sheet['일별시세']=two_headers('고시일')+[
-        tuple([dt]+[records[dt].get(k) for k in keys]) for dt in report_dates]
+        tuple([dt]+[records.get(dt,{}).get(k) for k in keys]) for dt in report_dates]
     acc=defaultdict(lambda:defaultdict(list))
     for dt in report_dates:
-        for k,v in records[dt].items():
+        for k,v in records.get(dt,{}).items():
             if k in keys and '_DIFF_KRW_per_' not in k:acc[dt[:7]][k].append(v)
     # Compatible existing daily sheet + user-requested always-created daily summary.
     # Both are regenerated from the SAME validated DB facts, not queried separately.
     sheet['일별요약']=[tuple(r) for r in sheet['일별시세']]
     sheet['월별시세']=two_headers('기준월')+[
         tuple([dt]+[(sum(acc[dt][k])/len(acc[dt][k])) if acc[dt].get(k) else None for k in keys])
-        for dt in sorted(acc)]
+        for dt in sorted({day[:7] for day in report_dates})]
     sheet['월별건수']=two_headers('기준월')+[
-        tuple([dt]+[len(acc[dt][k]) if acc[dt].get(k) else 0 for k in keys]) for dt in sorted(acc)]
+        tuple([dt]+[len(acc[dt][k]) if acc[dt].get(k) else 0 for k in keys])
+        for dt in sorted({day[:7] for day in report_dates})]
+    sheet['보류셀']=[('시트','기준일·월','시리즈 키','사유')]
+    invalid={(dt,k,reason) for dt,k,reason in quarantined if k in keys}
+    for dt,k,reason in sorted(invalid):
+        for tab in ('일별시세','일별요약'):
+            sheet['보류셀'].append((tab,dt,k,reason))
+    for month,k in sorted({(dt[:7],k) for dt,k,_ in invalid}):
+        if not acc[month].get(k):
+            sheet['보류셀'].append(('월별시세',month,k,'검증된 월별 표본 없음: 가격 충돌'))
     sheet['환율원본']=[('고시일','통화','매매기준율','전일대비','기준통화수량','출처')]+[
         (q.quote_date,q.currency,float(q.rate),float(q.difference),q.unit,q.source) for q in fx_quotes]
     max_date=max(records, default='')

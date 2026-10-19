@@ -155,7 +155,8 @@ def build_context(folder,start=None,end=None,series=None,*,synthetic=False,works
                 if isinstance(v,(int,float)):acc[row[0][:7]][i].append(v)
         for name,count in (('월별시세',False),('월별건수',True)):
             sheets[name]=[('기준월',)+sheets['일별시세'][0][1:],sheets['일별시세'][1]]+[
-                tuple([month]+[(len(acc[month][i]) if count else sum(acc[month][i])/len(acc[month][i])) if acc[month][i] else (0 if count else None) for i in range(len(sheets['일별시세'][0])-1)]) for month in sorted(acc)]
+                tuple([month]+[(len(acc[month][i]) if count else sum(acc[month][i])/len(acc[month][i])) if acc[month][i] else (0 if count else None) for i in range(len(sheets['일별시세'][0])-1)])
+                for month in sorted({row[0][:7] for row in sheets['일별시세'][2:]})]
     def latest(rows,key):
         result={}
         for r in sorted(rows,key=lambda r:(r['market_date'],r['captured_at'])):result[r[key]]=r

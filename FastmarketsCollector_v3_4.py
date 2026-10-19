@@ -152,6 +152,10 @@ def stored_symbols(folder,workspace_id=None):
     db = path_bundle(folder)['db']
     if not db.exists(): return []
     with closing(sqlite3.connect(db)) as cx:
+        # v3.7 creates its run ledger before the first FMB save. The database
+        # can therefore exist legitimately without an instruments table yet.
+        if not cx.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='instruments'").fetchone():
+            return []
         return [r[0] for r in cx.execute('SELECT DISTINCT symbol FROM instruments WHERE workspace_id=?', (workspace_id,))]
 
 

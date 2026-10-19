@@ -1,5 +1,7 @@
 # 이어서 작업할 때
 
+2026-10-20 hotfix1: 첫 FMB 초기 조회, 보류값의 누적 Excel/ECM 반영과 열 키 유지, GUI 오류 복구를 수정했습니다. `FIXES_V37_HOTFIX1.md`와 `test_v37_recovery.py`를 확인하세요. DB 부분 정정 시 이전 Mid/새 범위 혼합 문제는 여전히 별도 P1이며 운영 적용 전 해결해야 합니다. 새 보류셀 시트는 프로그램 관리 영역입니다. 실제 Windows/보안 Excel/ECM 인수는 여전히 필요합니다.
+
 최신 실행 파일은 FastmarketsCollector_v3_7.py. 실제 Selenium 수집 로직은 FastmarketsCollector_v3_4.py에 있습니다. 수정 전 README_V37.md, CHANGELOG_V37.md, VALIDATION_V37.md, 테스트를 읽으세요. 구버전 문서의 통과 수치를 현재 결과로 재사용하지 마세요.
 
 ## 남은 실환경 자료
