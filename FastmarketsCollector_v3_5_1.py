@@ -1,0 +1,4 @@
+"""Fastmarkets Collector v3.5.1 executable entrypoint."""
+from FastmarketsCollector_v3_4 import main
+if __name__ == '__main__':
+    main()
