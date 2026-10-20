@@ -16,7 +16,7 @@ import urllib.request
 
 SOURCE = "WESTMETALL"
 BASE_URL = "https://www.westmetall.com/en/markdaten.php?action=table&field=LME_{}_cash"
-METALS = {"NI": "Ni", "CU": "Cu"}
+METALS = {"NI": ("Ni", "Nickel"), "CU": ("Cu", "Copper")}
 DATE_RE = re.compile(r"^\s*(\d{1,2})\.\s*([A-Za-z]+)\s+(\d{4})\s*$")
 MONTHS = {m.lower(): i for i, m in enumerate(
     ("January", "February", "March", "April", "May", "June",
@@ -97,7 +97,7 @@ def parse_table(html, metal, source_url="", cutoff=None):
     # unrelated table must never be accepted as LME prices.
     headers = " ".join(" ".join(row) for row in parser.rows if
         any("Cash-Settlement" in c or "Cash Settlement" in c for c in row)).lower()
-    if not headers or METALS[metal].lower() not in headers or "stock" not in headers or "month" not in headers:
+    if not headers or METALS[metal][1].lower() not in headers or "stock" not in headers or "month" not in headers:
         raise WestmetallError(f"{metal}: LME Cash/3-month/stock table header not verified")
     observations = []
     for row in parser.rows:
@@ -185,7 +185,7 @@ def collect_and_save(db_path, lookback_days=35, *, fetcher=None, logger=print):
     rows = []
     warnings = []
     for metal in METALS:
-        url = BASE_URL.format(metal)
+        url = BASE_URL.format(METALS[metal][0])
         try:
             parsed = parse_table(fetch(url),metal,url,cutoff=cutoff)
             rows.extend(parsed)
