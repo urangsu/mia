@@ -26,8 +26,8 @@ class Edit:
     row: int
     col: int
     previous: object
-    incoming: float
-    decision: str # new_row, fill, correction
+    incoming: float | None
+    decision: str # fill, correction, quarantine (withdraw a conflicting fact)
 
 
 def date_key(value, date1904=False):
@@ -87,7 +87,8 @@ def series_source(key):
 
 
 def build_plan(source_rows, source_catalog_rows, target_rows, target_catalog_rows,
-               *, date1904=False, allow_missing_columns=True, max_edits=100000, period_type="daily"):
+               *, date1904=False, allow_missing_columns=True, max_edits=100000, period_type="daily",
+               clear_cells=()):
     """Pure planner for testability and determinism. No external spreadsheet writes.
 
     Content layout: row1 name, row2 origin, row3+ date and numeric values.
@@ -110,6 +111,7 @@ def build_plan(source_rows, source_catalog_rows, target_rows, target_catalog_row
     dest_catalog=_build_catalogue(target_catalog_rows,'ECM')
     src_keys=_lookup(source_rows[0],source_rows[1],src_catalog,'원본')
     dst_keys=_lookup(target_rows[0],target_rows[1],dest_catalog,'ECM')
+    clears={(normalize(day),key) for day,key in clear_cells}
     # A changed/missing ECM caption in the catalogue is ambiguous, not permission
     # to append a duplicate series with identical underlying identity.
     for key in dest_catalog:
@@ -143,7 +145,7 @@ def build_plan(source_rows, source_catalog_rows, target_rows, target_catalog_row
         day=date_key(row[0]) if period_type=='daily' else normalize(row[0])
         if day in date_to_src:raise ECMBlocked(f'수집용 시세표에 날짜 {day}가 중복입니다.')
         date_to_src[day]=row
-    new_dates=[];edits=[];unchanged=0;skipped=0;corrections=0
+    new_dates=[];edits=[];unchanged=0;skipped=0;corrections=0;cleared=0
     next_row=max(len(target_rows),2)
     for day,source in sorted(date_to_src.items()):
         if day in date_to_row:
@@ -155,7 +157,8 @@ def build_plan(source_rows, source_catalog_rows, target_rows, target_catalog_row
             new_dates.append({'date':day,'row':row_idx})
         for key,src_col in src_keys.items():
             incoming=_decimal(source[src_col-1] if len(source)>=src_col else None)
-            if incoming is None:
+            withdraw=incoming is None and (day,key) in clears
+            if incoming is None and not withdraw:
                 skipped+=1;continue
             dst_col=dst_keys[key]
             old=existing[dst_col-1] if len(existing)>=dst_col else None
@@ -164,16 +167,17 @@ def build_plan(source_rows, source_catalog_rows, target_rows, target_catalog_row
                 raise ECMBlocked(f'ECM {day} / {key}: 숫자가 아닌 기존 데이터가 있어 덮어쓰기 차단')
             if prior == incoming:
                 unchanged+=1;continue
-            decision='fill' if prior is None else 'correction'
-            if prior is not None:corrections+=1
+            decision='quarantine' if withdraw else 'fill' if prior is None else 'correction'
+            if withdraw:cleared+=1
+            elif prior is not None:corrections+=1
             edits.append(Edit(day,key,src_catalog[key],
                                series_source(key),
                               row_idx,dst_col,float(prior) if prior is not None else None,
-                              float(incoming),decision))
+                              float(incoming) if incoming is not None else None,decision))
             if len(edits)>max_edits:raise ECMBlocked('한 번에 쓰려는 셀이 상한을 초과했습니다. 날짜 범위를 검토하세요.')
     return {'edits':[asdict(e) for e in edits], 'new_dates':new_dates, 'new_columns':appended,
-            'stats':{'new_columns':len(appended),'new_dates':len(new_dates),'fill':len(edits)-corrections,
-                     'correction':corrections,'unchanged':unchanged,'missing_source':skipped},
+            'stats':{'new_columns':len(appended),'new_dates':len(new_dates),'fill':len(edits)-corrections-cleared,
+                     'correction':corrections,'cleared':cleared,'unchanged':unchanged,'missing_source':skipped},
             'src_count':len(date_to_src),'target_count':len(target_rows)-2}
 
 
@@ -235,40 +239,45 @@ def _read_catalog(wb):
     except Exception as exc:raise ECMBlocked('ECM 파일에 가격열설정 시트가 없습니다. 수집기가 생성한 완전한 파일을 업로드하세요.') from exc
 
 
-def _snapshot_from_db(folder):
+def _snapshot_from_db(folder, *, with_quarantine=False):
     from report_model import build_context,make_workbook_sheets
     sheets=make_workbook_sheets(build_context(Path(folder)))
-    return sheets['일별요약'],sheets['가격열설정']
+    result=(sheets['일별요약'],sheets['가격열설정'])
+    if with_quarantine:
+        from excel_secure import quarantined_cells
+        return result+(quarantined_cells(sheets,'일별요약'),)
+    return result
 
 
 def prepare_ecm_plan(folder, expected_basename, *, local_path=None, target_fullname=None,
                      target_sheet='일별요약', target_hwnd=None, log=print):
-    source, source_catalog=_snapshot_from_db(folder)
+    source, source_catalog, clears=_snapshot_from_db(folder,with_quarantine=True)
     with _attached_excel(expected_basename,local_path,target_fullname) as wb:
         if target_hwnd is not None and int(wb.Application.Hwnd)!=int(target_hwnd):
             raise ECMBlocked('ECM 열기 이후 Excel 프로세스가 변경되었습니다. 다시 확인하세요.')
         try:ws=wb.Worksheets(target_sheet)
         except Exception as exc:raise ECMBlocked(f'ECM 통합문서에 {target_sheet} 시트가 없습니다. 올린 Excel 파일을 확인하세요.') from exc
         dest=_read_matrix(ws);catalog=_read_catalog(wb)
-        plan=build_plan(source,source_catalog,dest,catalog,date1904=bool(wb.Date1904))
+        plan=build_plan(source,source_catalog,dest,catalog,date1904=bool(wb.Date1904),clear_cells=clears)
         plan['workbook_name']=str(wb.Name);plan['workbook_path']=str(wb.FullName)
         plan['sheet']=target_sheet
         if target_hwnd is not None:plan['excel_hwnd']=int(target_hwnd)
         plan['fingerprint']=plan_fingerprint({k:v for k,v in plan.items() if k!='fingerprint'})
         log(f'ECM 미리보기: 날짜 +{plan["stats"]["new_dates"]}, 종목 +{plan["stats"]["new_columns"]}, '
-            f'빈 셀 {plan["stats"]["fill"]}, 정정 후보 {plan["stats"]["correction"]}, 기존 동일 {plan["stats"]["unchanged"]}')
+            f'빈 셀 {plan["stats"]["fill"]}, 정정 후보 {plan["stats"]["correction"]}, '
+            f'충돌 보류·기존값 비우기 {plan["stats"]["cleared"]}, 기존 동일 {plan["stats"]["unchanged"]}')
         return plan
 
 
 def apply_ecm_plan(folder, expected_basename, approved_plan, *, local_path=None, log=print):
     full=approved_plan['workbook_path'];sheet=approved_plan['sheet']
-    source,source_catalog=_snapshot_from_db(folder)
+    source,source_catalog,clears=_snapshot_from_db(folder,with_quarantine=True)
     with _attached_excel(expected_basename,local_path,full) as wb:
         if 'excel_hwnd' in approved_plan and int(wb.Application.Hwnd)!=int(approved_plan['excel_hwnd']):
             raise ECMBlocked('승인 이후 Excel 프로세스가 변경되어 반영을 차단했습니다.')
         ws=wb.Worksheets(sheet)
         if ws.ProtectContents:raise ECMBlocked(f'{sheet} 시트가 보호돼 있어 자동입력이 불가합니다.')
-        current=build_plan(source,source_catalog,_read_matrix(ws),_read_catalog(wb),date1904=bool(wb.Date1904))
+        current=build_plan(source,source_catalog,_read_matrix(ws),_read_catalog(wb),date1904=bool(wb.Date1904),clear_cells=clears)
         current['workbook_name']=str(wb.Name);current['workbook_path']=str(wb.FullName);current['sheet']=sheet
         if 'excel_hwnd' in approved_plan:current['excel_hwnd']=int(wb.Application.Hwnd)
         sig=plan_fingerprint(current)
@@ -320,7 +329,8 @@ def apply_ecm_plan(folder, expected_basename, approved_plan, *, local_path=None,
             wb.Save()
             for e in current['edits']:
                 v=ws.Cells(e['row'],e['col']).Value2
-                if _decimal(v)!=_decimal(e['incoming']):
+                valid=v in (None,'') if e['incoming'] is None else _decimal(v)==_decimal(e['incoming'])
+                if not valid:
                     raise ECMBlocked(f'Excel 저장 후 셀 재검증 실패: {e["row"]}행 {e["col"]}열')
         except Exception as exc:
             rollback_errors=0
