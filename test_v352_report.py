@@ -13,7 +13,7 @@ def p(symbol, date, price_mode='Actual', mid='10', low='9', high='11'):
 
 class V352ReportTests(unittest.TestCase):
     def test_mid_only_and_forecast_then_actual(self):
-        rows=[p('MB-CO-0005','2026-10-16',mid='100'),
+        rows=[p('MB-CO-0005','2026-10-16',mid='100', high='110'),
               p('MB-LI-0029','2026-10-16',price_mode='Forecast',mid='12'),
               p('MB-LI-0029','2026-10-16',price_mode='Actual',mid='10')]
         sheets=make_sheets(rows,[],[])
