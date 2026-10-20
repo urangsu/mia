@@ -73,7 +73,8 @@ class PriceRevisionTests(unittest.TestCase):
         quoted=replace(empty,date='2026-10-19',mid='15')
         warnings=[];quarantined=[]
         rows=prepare_excel_series([empty,quoted],[],issues=warnings,quarantined=quarantined)
-        self.assertNotIn(DAY,rows)
+        # Raw LOW/HIGH evidence remains; MID and the daily report row do not.
+        self.assertNotIn(KEY,rows.get(DAY,{}))
         self.assertFalse(quarantined)
         sheets=make_sheets([empty,quoted],[],[])
         self.assertEqual([r[0] for r in sheets['일별시세'][2:]],['2026-10-19'])
