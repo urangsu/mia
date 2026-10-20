@@ -333,7 +333,7 @@ def report_series_label(key: str) -> str:
 
 
 def report_series_source(key: str) -> str:
-    return 'SMBS' if key.startswith('FX_') else 'FMB'
+    return 'SMBS' if key.startswith('FX_') else 'WESTMETALL' if key.startswith('LME|') else 'FMB'
 
 
 def prepare_excel_series(fmb_prices, fx_quotes, *, issues=None):
