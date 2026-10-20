@@ -473,7 +473,7 @@ def write_com_sheets(path:Path, sheets:dict[str,list[tuple]], *, active='일별�
         tmp.unlink(missing_ok=True)
 
 
-def make_sheets(prices, latest, fx_quotes, aliases=None):
+def make_sheets(prices, latest, fx_quotes, aliases=None, *, known_withdrawals=()):
     from collections import defaultdict
     from smbs_rates import prepare_excel_series,FX_CODES,QUOTE_UNITS,report_series_label,report_series_source
     aliases=aliases or {}
@@ -488,7 +488,7 @@ def make_sheets(prices, latest, fx_quotes, aliases=None):
     sheet['Latest']=[('symbol','description','date','low','mid','high','unit','change_pct','price_mode','freshness','widget','source')]+[
         tuple(r.get(k) for k in ('symbol','description','date','low','mid','high','unit','change_pct','price_mode','freshness','widget','source')) for r in latest]
     issues=[];quarantined=[]
-    records=prepare_excel_series(prices,fx_quotes,issues=issues,quarantined=quarantined)
+    records=prepare_excel_series(prices,fx_quotes,issues=issues,quarantined=quarantined,known_withdrawals=known_withdrawals)
     available={k for r in records.values() for k in r}
     # Preserve series identity even if every observation is currently withheld.
     available.update(k for _,k,_ in quarantined)
