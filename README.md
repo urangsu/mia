@@ -1,8 +1,12 @@
 # mia · Fastmarkets Collector v3.7
 
+현재 개발 브랜치의 기본 화면은 Qt입니다. **[기능 우선 개발판 실행·변경·남은 검증](FUNCTION_FIRST_README.md)**을 먼저 읽으세요. 설치: `py -m pip install -r requirements-desktop.txt`. 기존 Tk 화면은 `--legacy-gui`로 보존합니다. 회사 사이트 수집·보안 Excel·ECM 인수는 미완료이며 배포 승인본이 아닙니다.
+
 금속·환율·시장 확정 종가를 SQLite와 누적 Excel에 보관하고 HTML·편집 가능한 PPTX 보고서를 만드는 Windows 업무 도구입니다. 기본 예약 시각은 **08:30 KST**입니다.
 
 현재는 **실환경 인수 전 후보 빌드**입니다. 클라우드에서 통과한 모의 테스트가 회사 Windows·Fastmarkets 구독·NAVER 실DOM·ECM 서버 성공을 의미하지 않습니다.
+
+2026-10-20 hotfix1은 첫 수집의 DB 초기 조회, 충돌 보류값의 Excel 반영·열 매핑 유지, GUI 오류 후 상태 갱신을 수정했습니다. [당시 수정·검증 안내](FIXES_V37_HOTFIX1.md)는 역사 기록입니다. 이후 기능 우선 개발판에서 부분 가격 정정의 Mid 범위 일관성 방어를 추가했습니다. 기존 Excel 사본으로 먼저 확인하세요.
 
 ## Codex에서 이어 작업
 
