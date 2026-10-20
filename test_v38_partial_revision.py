@@ -64,6 +64,21 @@ class PriceRevisionTests(unittest.TestCase):
             self.assertEqual(plan['edits'][0]['incoming'],35000)
             self.assertFalse(plan['new_columns'])
 
+    def test_unquoted_first_day_does_not_create_false_withdrawal(self):
+        from excel_secure import make_sheets
+        from smbs_rates import prepare_excel_series
+        from dataclasses import replace
+        empty=core.Price('MB-LI-0029',DAY,'10',None,'20',None,'$/kg',
+            'Lithium carbonate','Lithium','Actual','AG Grid','first')
+        quoted=replace(empty,date='2026-10-19',mid='15')
+        warnings=[];quarantined=[]
+        rows=prepare_excel_series([empty,quoted],[],issues=warnings,quarantined=quarantined)
+        self.assertNotIn(DAY,rows)
+        self.assertFalse(quarantined)
+        sheets=make_sheets([empty,quoted],[],[])
+        self.assertEqual([r[0] for r in sheets['일별시세'][2:]],['2026-10-19'])
+        self.assertEqual(sheets['월별건수'][2][1],1)
+
     def test_legacy_stale_mid_outside_range_is_not_reported(self):
         with tempfile.TemporaryDirectory() as folder:
             # Legacy COALESCE may already have saved the impossible tuple.
