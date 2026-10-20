@@ -349,9 +349,18 @@ def prepare_excel_series(fmb_prices, fx_quotes, *, issues=None, quarantined=None
     quarantined=quarantined if quarantined is not None else []
     values=defaultdict(dict)
     candidates=defaultdict(list)
+    # A partial same-view revision may replace a previously valid Mid with NULL.
+    # Keep that series identity and explicitly withdraw a stale exported value.
+    missing_mids=set()
+    valid_mids=set()
     for p in fmb_prices:
         if p.price_mode not in ('Actual','Unspecified','Forecast') or p.period_label:
             continue
+        mid_key=f'FMB|{p.symbol}|{p.unit}|{p.price_mode}|MID'
+        if p.mid is None and (p.low is not None or p.high is not None):
+            missing_mids.add((p.date,mid_key))
+        elif p.mid is not None:
+            valid_mids.add((p.date,mid_key))
         for field in ('mid','low','high'):
             val=getattr(p,field)
             if val is None:continue
@@ -378,20 +387,47 @@ def prepare_excel_series(fmb_prices, fx_quotes, *, issues=None, quarantined=None
             elif p.symbol in ('MB-LI-0029','MB-LI-0033') and p.unit.replace(' ','').lower() in ('$/kg','usd/kg'):
                 number=number*Decimal(1000)
             candidates[(p.date,key)].append((number,bounded,p.view_key,converted_panel))
+    for dt,key in sorted(missing_mids - valid_mids):
+        quarantined.append((dt,key,'부분 가격 정정으로 Mid 누락; 이전 값 자동 비우기'))
+        issues.append(f'{dt} {key}: Mid 미고시/불완전 정정으로 보고값 보류')
     for (dt,key),samples in candidates.items():
+        # A single view with old incompatible low/high/mid can have been persisted
+        # by the legacy COALESCE upsert. Do not present the inconsistent Mid.
+        if key.endswith('|MID'):
+            for row in fmb_prices:
+                if (row.date!=dt or
+                    f'FMB|{row.symbol}|{row.unit}|{row.price_mode}|MID'!=key or
+                    row.mid is None or row.low is None or row.high is None):
+                    continue
+                try:
+                    mid=Decimal(str(row.mid));low=Decimal(str(row.low));high=Decimal(str(row.high))
+                except (InvalidOperation,TypeError,ValueError):
+                    continue
+                if not (low<=mid<=high):
+                    quarantined.append((dt,key,'레거시 가격 Low/Mid/High 불일치'))
+                    issues.append(f'{dt} {key}: 원본 범위 Low <= Mid <= High 불일치; 반영 보류')
+                    break
+            else:
+                pass
+            if any(d==dt and k==key and why=='레거시 가격 Low/Mid/High 불일치'
+                   for d,k,why in quarantined):
+                continue
         is_cobalt=key.startswith('FMB|MB-CO-0005|') and '|$/lb|' in key.replace(' ','')
         originals=[v for v,_,_,converted in samples if not converted]
         converted=[v for v,_,_,is_converted in samples if is_converted]
         if is_cobalt and converted and not originals:
+            quarantined.append((dt,key,'원본 파운드 가격 미검증'))
             issues.append(f'{dt} {key}: Tonne 변환 위젯만 발견; 원본 $/lb 확인 전 보고 반영 보류')
             continue
         uniques=set(originals if is_cobalt else [v for v,_,_,_ in samples])
         if len(uniques)==1:
             canonical=next(iter(uniques))
             if converted and any(abs(v-canonical)>Decimal('0.02') for v in converted):
+                quarantined.append((dt,key,'Tonne 변환 위젯 교차 검증 불일치'))
                 issues.append(f'{dt} {key}: 원본 대비 Tonne 위젯 검산 불일치; 반영 보류')
                 continue
             values[dt][key]=float(canonical);continue
+        quarantined.append((dt,key,'서로 다른 뷰 가격 충돌'))
         issues.append(f'{dt} {key}: 서로 다른 뷰 가격 충돌 {sorted(str(v) for v in uniques)}; 일별시세 반영 보류')
         quarantined.append((dt,key,'서로 다른 뷰 가격 충돌'))
     fx_candidates=defaultdict(list)
