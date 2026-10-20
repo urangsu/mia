@@ -25,7 +25,7 @@ def price(**kw):
 
 
 class NewContracts(unittest.TestCase):
-    def test_partial_upsert_keeps_existing_fields(self):
+    def test_partial_revision_replaces_price_tuple_without_stale_fields(self):
         with tempfile.TemporaryDirectory() as t:
             db = Path(t)/'x.db'
             diag = {'widget_count':1, 'found_symbols':['MB-LI-0029'], 'warnings':[]}
@@ -33,7 +33,7 @@ class NewContracts(unittest.TestCase):
             m.save_sqlite(db, [price(low=None, mid='15', high=None, change_pct=None)], [], diag)
             with closing(sqlite3.connect(db)) as cx:
                 row = cx.execute('select low,mid,high,change_pct from prices').fetchone()
-            self.assertEqual(row, ('14','15','15.6','-5.13'))
+            self.assertEqual(row, (None,'15',None,None))
 
     def test_revision_audit(self):
         with tempfile.TemporaryDirectory() as t:
