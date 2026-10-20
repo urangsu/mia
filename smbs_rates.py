@@ -364,11 +364,33 @@ def prepare_excel_series(fmb_prices, fx_quotes, *, issues=None):
                     low=Decimal(str(p.low));high=Decimal(str(p.high))
                     bounded=low<=number<=high and low<=high
                 except (InvalidOperation,ValueError):pass
-            candidates[(p.date,key)].append((number,bounded,p.view_key))
+            # Unit normalization is a REPORT projection, not a mutation of SQLite RawData.
+            # Two cobalt panels can share the SAME MB-CO-0005/$/lb description,
+            # while the display toggle on one panel renders already-converted $/tonne.
+            # Trust canonical lb observations; reject converted-only observations.
+            converted_panel=False
+            if p.symbol=='MB-CO-0005' and p.unit.replace(' ','').lower() in ('$/lb','usd/lb'):
+                if number >= Decimal('1000'):
+                    converted_panel=True
+                else:
+                    number=(number*Decimal('2204.62262185')).quantize(Decimal('0.01'))
+            elif p.symbol in ('MB-LI-0029','MB-LI-0033') and p.unit.replace(' ','').lower() in ('$/kg','usd/kg'):
+                number=number*Decimal(1000)
+            candidates[(p.date,key)].append((number,bounded,p.view_key,converted_panel))
     for (dt,key),samples in candidates.items():
-        uniques={num for num,_,_ in samples}
+        is_cobalt=key.startswith('FMB|MB-CO-0005|') and '|$/lb|' in key.replace(' ','')
+        originals=[v for v,_,_,converted in samples if not converted]
+        converted=[v for v,_,_,is_converted in samples if is_converted]
+        if is_cobalt and converted and not originals:
+            issues.append(f'{dt} {key}: Tonne 변환 위젯만 발견; 원본 $/lb 확인 전 보고 반영 보류')
+            continue
+        uniques=set(originals if is_cobalt else [v for v,_,_,_ in samples])
         if len(uniques)==1:
-            values[dt][key]=float(next(iter(uniques)));continue
+            canonical=next(iter(uniques))
+            if converted and any(abs(v-canonical)>Decimal('0.02') for v in converted):
+                issues.append(f'{dt} {key}: 원본 대비 Tonne 위젯 검산 불일치; 반영 보류')
+                continue
+            values[dt][key]=float(canonical);continue
         issues.append(f'{dt} {key}: 서로 다른 뷰 가격 충돌 {sorted(str(v) for v in uniques)}; 일별시세 반영 보류')
     fx_candidates=defaultdict(list)
     for q in fx_quotes:
