@@ -10,7 +10,7 @@ class V351DailyTests(unittest.TestCase):
         out=make_sheets([p],[],[])
         self.assertEqual(out['일별시세'][0],('고시일','LC'))
         self.assertEqual(out['일별시세'][1],('','FMB'))
-        self.assertEqual(out['일별시세'][2],('2026-10-16',14.0))
+        self.assertEqual(out['일별시세'][2],('2026-10-16',14000.0))
         self.assertNotIn('LC(하한)',out['일별시세'][0])
         self.assertNotIn('LC(상한)',out['일별시세'][0])
     def test_daily_scroll_budget(self):
@@ -22,8 +22,9 @@ class V351DailyTests(unittest.TestCase):
         one=SimpleNamespace(symbol='MB-CO-0005',unit='$/lb',price_mode='Actual',period_label='',view_key='a',date='2026-10-16',mid='22.93',low='21',high='24')
         two=SimpleNamespace(symbol='MB-CO-0005',unit='$/lb',price_mode='Actual',period_label='',view_key='b',date='2026-10-16',mid='50552',low=None,high=None)
         issues=[];d=prepare_excel_series([one,two],[],issues=issues)
-        self.assertNotIn('FMB|MB-CO-0005|$/lb|Actual|MID',d.get('2026-10-16',{}))
-        self.assertEqual(len(issues),1)
+        # The second panel is a verified Tonne conversion, not a conflicting dollar-per-pound price.
+        self.assertEqual(d['2026-10-16']['FMB|MB-CO-0005|$/lb|Actual|MID'],50552.0)
+        self.assertFalse(issues)
     def test_conflicts_without_evidence_blank(self):
         def a(v,id):return SimpleNamespace(symbol='MB-CO-0005',unit='$/lb',price_mode='Actual',period_label='',view_key=id,date='2026-10-16',mid=v,low=None,high=None)
         i=[];d=prepare_excel_series([a('22','a'),a('55','b')],[],issues=i)
