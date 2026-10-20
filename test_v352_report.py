@@ -7,6 +7,9 @@ from smbs_rates import FXQuote
 
 
 def p(symbol, date, price_mode='Actual', mid='10', low='9', high='11'):
+    # Synthetic quotes must satisfy low <= Mid <= high; otherwise the real
+    # collector correctly quarantines them rather than reporting a fabricated price.
+    if mid is not None and float(mid)>float(high): high=str(float(mid)+1)
     return SimpleNamespace(symbol=symbol,date=date,unit='USD/t',price_mode=price_mode,
                            period_label='',view_key='view',mid=mid,low=low,high=high,
                            change_pct=None,description='description',widget='grid',source='FMB')
