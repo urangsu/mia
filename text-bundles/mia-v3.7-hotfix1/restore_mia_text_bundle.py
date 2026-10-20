@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-"""Restore the reviewed mia source from PGPT JSONL text parts, offline.
+"""Restore the reviewed MIA source from one JSONL text bundle, offline.
 
-Usage: py restore_mia_text_bundle.py [PGPT_TEXT_PART_*.txt] --out mia-v3.7-hotfix1
+Usage: py restore_mia_text_bundle.py [MIA_TEXT_BUNDLE.txt] --out mia-v3.7-hotfix1
 Only validates and writes files. Does not install dependencies or run the app.
 """
 from __future__ import annotations
 
 import argparse
-import glob
 import hashlib
 import json
 import re
@@ -15,8 +14,7 @@ import sys
 import tempfile
 from pathlib import Path, PurePosixPath
 
-PART_RE = re.compile(r'PGPT_TEXT_PART_(\d+)\.txt', re.I)
-HASH_RE = re.compile(r'[0-9a-f]{64}')
+EXPECTED_BUNDLE_SHA256 = 'da5662f073e83a458188bae15820d6c19330aa0b8fa3fa001bf6263849eb311f'
 RELEASE = 'mia-v3.7-hotfix1-20261020'
 
 
@@ -41,58 +39,20 @@ def safe_relative(value):
     return PurePosixPath(value)
 
 
-def read_parts(paths):
-    if not paths:
-        raise ValueError('No PGPT_TEXT_PART_*.txt found beside this script')
-    found = {}
-    count = None
-    bundle_hash = None
-    folder = paths[0].parent.resolve()
-    manifest_path = folder/'PGPT_TEXT_PARTS.sha256.txt'
-    if not manifest_path.is_file():
-        raise ValueError('Missing PGPT_TEXT_PARTS.sha256.txt')
-    manifest = {}
-    for line in read_text(manifest_path).splitlines():
-        match = re.fullmatch(r'([0-9a-f]{64})  (PGPT_TEXT_PART_\d+\.txt)', line)
-        if match:
-            if match[2] in manifest:
-                raise ValueError('Duplicate checksum entry')
-            manifest[match[2]] = match[1]
-    for path in paths:
-        match = PART_RE.fullmatch(path.name)
-        if not match or path.parent.resolve() != folder:
-            raise ValueError('Parts must have numbered filenames in the same folder')
-        text = read_text(path)
-        if manifest.get(path.name) != sha(text.encode('utf-8')):
-            raise ValueError('Part file checksum mismatch: '+path.name)
-        header, separator, payload = text.partition('---\n')
-        if not separator or not header.startswith('PGPT_TEXT_BRINGIN_PART\n'):
-            raise ValueError('Invalid part header: '+path.name)
-        meta = dict(line.split(': ', 1) for line in header.splitlines()[1:] if ': ' in line)
-        if meta.get('format') != 'pgpt_text_bringin_v1':
-            raise ValueError('Unsupported bundle format')
-        part = re.fullmatch(r'([1-9]\d*)/([1-9]\d*)', meta.get('part', ''))
-        if not part:
-            raise ValueError('Invalid part index')
-        index, total = map(int, part.groups())
-        if index != int(match[1]) or index > total or index in found:
-            raise ValueError('Wrong or duplicate part index: '+path.name)
-        if count is None:
-            count, bundle_hash = total, meta.get('bundle_sha256', '')
-        if total != count or meta.get('bundle_sha256') != bundle_hash:
-            raise ValueError('Mixed bundles or part counts')
-        if payload.endswith('\n'):
-            payload = payload[:-1]
-        if meta.get('payload_sha256') != sha(payload.encode('utf-8')):
-            raise ValueError('Payload checksum mismatch: '+path.name)
-        found[index] = payload
-    if set(found) != set(range(1, count+1)) or len(manifest) != count:
-        raise ValueError('Missing or extra parts; all parts and the checksum file are required')
-    if not HASH_RE.fullmatch(bundle_hash):
-        raise ValueError('Invalid bundle checksum')
-    payload = '\n'.join(found[i] for i in range(1, count+1))
-    if sha(payload.encode('utf-8')) != bundle_hash:
-        raise ValueError('Bundle checksum mismatch')
+def read_bundle(path):
+    text = read_text(path)
+    header, separator, payload = text.partition('---\n')
+    if not separator or not header.startswith('MIA_TEXT_BUNDLE\n'):
+        raise ValueError('Invalid MIA bundle header')
+    meta = dict(line.split(': ', 1) for line in header.splitlines()[1:] if ': ' in line)
+    if meta.get('format') != 'mia_text_bundle_v1':
+        raise ValueError('Unsupported MIA bundle format')
+    if payload.endswith('\n'):
+        payload = payload[:-1]
+    # The expected hash lives in this restorer, independently of the text file.
+    actual = sha(payload.encode('utf-8'))
+    if actual != EXPECTED_BUNDLE_SHA256 or meta.get('bundle_sha256') != actual:
+        raise ValueError('MIA bundle checksum mismatch; save the complete Raw text as UTF-8')
     return payload
 
 
@@ -126,8 +86,8 @@ def records(payload):
     return metadata, files
 
 
-def restore(paths, output):
-    metadata, files = records(read_parts(paths))
+def restore(bundle, output):
+    metadata, files = records(read_bundle(bundle))
     if output.is_symlink():
         raise ValueError('Output must not be a symbolic link')
     output = output.absolute()
@@ -158,20 +118,13 @@ def restore(paths, output):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Restore mia v3.7 hotfix1 from text parts (offline)')
-    parser.add_argument('parts', nargs='*')
+    parser = argparse.ArgumentParser(description='Restore MIA v3.7 hotfix1 from one text bundle (offline)')
+    parser.add_argument('bundle', nargs='?', type=Path,
+                        default=Path(__file__).resolve().parent/'MIA_TEXT_BUNDLE.txt')
     parser.add_argument('--out', type=Path, default=Path('mia-v3.7-hotfix1'))
     args = parser.parse_args()
-    paths = []
-    for pattern in args.parts:
-        expanded = glob.glob(pattern) if any(c in pattern for c in '*?') else [pattern]
-        if not expanded:
-            parser.error('No files match: '+pattern)
-        paths.extend(Path(p) for p in expanded)
-    if not args.parts:
-        paths = sorted(Path(__file__).resolve().parent.glob('PGPT_TEXT_PART_*.txt'))
     try:
-        restore(paths, args.out)
+        restore(args.bundle, args.out)
     except (OSError, ValueError, KeyError, TypeError) as exc:
         print('ERROR: '+str(exc), file=sys.stderr)
         return 1
