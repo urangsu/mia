@@ -94,7 +94,7 @@ class QuarantineTests(unittest.TestCase):
             plan = self.plan(recovered, conflicted)
             self.assertFalse(plan['new_columns'])
             self.assertEqual(plan['edits'][0]['col'], 2)
-            self.assertEqual(plan['edits'][0]['incoming'], 15)
+            self.assertEqual(plan['edits'][0]['incoming'], 15000)
 
     def test_only_conflicted_cell_clears_and_other_month_values_survive(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -105,7 +105,7 @@ class QuarantineTests(unittest.TestCase):
                                       for i, r in enumerate(before['일별시세'])]
             plan = self.plan(after, before)
             self.assertEqual([(e['date'], e['col'], e['incoming']) for e in plan['edits']], [(DAY, 3, None)])
-            self.assertEqual(after['월별시세'][2][1], 12)
+            self.assertEqual(after['월별시세'][2][1], 12000)
             self.assertEqual(after['월별건수'][2][1], 1)
             self.assertFalse(excel_secure.quarantined_cells(after, '월별시세'))
 
@@ -141,7 +141,7 @@ class QuarantineTests(unittest.TestCase):
             ws = wb.Worksheets.return_value; ws.ProtectContents = False
             ws.UsedRange.Column = 1; ws.UsedRange.Row = 1
             ws.UsedRange.Columns.Count = 2; ws.UsedRange.Rows.Count = 3
-            cell = MagicMock(); cell.HasFormula = False; cell.Value2 = 15
+            cell = MagicMock(); cell.HasFormula = False; cell.Value2 = 15000
             ws.Cells.return_value = cell
             @contextmanager
             def attached(*args, **kwargs): yield wb
@@ -183,7 +183,7 @@ class QuarantineTests(unittest.TestCase):
             store(folder, [price(mid='99', view_key='two')]); after = sheets(folder)
             # Limit the COM double to the production daily/catalog/audit paths.
             after = {k: after[k] for k in ('일별시세', '가격열설정', '보류셀')}
-            before['일별시세'] = [('고시일', 'Manual', 'LC'), ('', 'USER', 'FMB'), (DAY, '=1+1', 15)]
+            before['일별시세'] = [('고시일', 'Manual', 'LC'), ('', 'USER', 'FMB'), (DAY, '=1+1', 15000)]
             pages = {}
             class Cell:
                 def __init__(self, value=None):
@@ -245,10 +245,10 @@ class QuarantineTests(unittest.TestCase):
                 store(folder,[price(view_key='two')])
                 recovered=sheets(folder)
                 excel_secure.write_com_sheets(target,{k:recovered[k] for k in after})
-                self.assertEqual(pages['일별시세'].cell(3,3).Value2,15)
+                self.assertEqual(pages['일별시세'].cell(3,3).Value2,15000)
                 # A formula in the managed cell must block a later withdrawal.
                 pages['일별시세'].cell(3,3).HasFormula=True
-                before['일별시세'][-1]=(DAY,'=1+1',15)
+                before['일별시세'][-1]=(DAY,'=1+1',15000)
                 store(folder,[price(mid='99',view_key='two')])
                 conflicted=sheets(folder)
                 saves=wb.SaveAs.call_count
