@@ -80,3 +80,10 @@ GitHub Actions (PR의 최신 작업): https://github.com/urangsu/mia/actions/wor
 6. 숫자 휴리스틱 기반 변환뷰 구분을 명시적인 **표시 단위·전환 버튼 상태** 추적으로 교체할 필요가 있음.
 
 **GitHub CI 통과 ≠ 현장 운영 승인.** 업무 원본에는 검증·백업 전 적용하지 않는다.
+
+## 검증 결과 확정 — GitHub Actions 2026-10-20
+
+- [Run #39360689427](https://github.com/urangsu/mia/actions/runs/39360689427): **success**.
+- 신규 집중 회귀 12/12 통과, 전체 오프라인 회귀 **227/227 통과** (집중 12개는 전체 227개에 포함됨). Python `compileall` 성공.
+- 최초 병합 후 전체 226개 중 6개 실패를 확인했고, 구버전 `$/kg` → `USD/tonne` 기대값·원자적 가격 정정 정책과 맞지 않는 테스트를 갱신했다. 별도로 신규 미고시를 철회로 잘못 분류한 코드 오류를 정정 이력 판정으로 수정했다.
+- 다음 증거 전까지 **실제 FMB DOM, Westmetall 현장 접속, Windows DRM COM, ECM 서버 업로드가 검증됐다고 주장하지 않는다**.
