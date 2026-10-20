@@ -83,7 +83,7 @@ def _lookup(header1, header2, catalog, origin):
 
 
 def series_source(key):
-    return 'SMBS' if key.startswith('FX_') else 'NAVER' if key.startswith('NAVER|') else 'FMB'
+    return 'SMBS' if key.startswith('FX_') else 'NAVER' if key.startswith('NAVER|') else 'WESTMETALL' if key.startswith('LME|') else 'FMB'
 
 
 def build_plan(source_rows, source_catalog_rows, target_rows, target_catalog_rows,
