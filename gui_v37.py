@@ -38,6 +38,7 @@ def main_gui():
     save_dir=tk.StringVar(value=cfg['data_dir'])
     excel_path=tk.StringVar(value=cfg.get('workbook_path',''))
     lookback=tk.StringVar(value=str(cfg.get('lookback_days',31)))
+    lme_enabled=tk.BooleanVar(value=bool(cfg.get('lme_enabled',True)))
     workspace=tk.StringVar(value=cfg.get('workspace_url',core.WORKSPACE_URL))
     ecm_title=tk.StringVar(value=('fastmarkets_prices.xlsx' if cfg.get('ecm_title')=='(리뉴얼)금속 가격 현황' else cfg.get('ecm_title','fastmarkets_prices.xlsx')))
     ecm_search=tk.StringVar(value=('fastmarkets_prices' if cfg.get('ecm_search')=='금속 가격 현황' else cfg.get('ecm_search','fastmarkets_prices')))
@@ -67,7 +68,7 @@ def main_gui():
         out=dict(cfg)
         out.update(data_dir=str(Path(save_dir.get()).expanduser()),workbook_path=excel_path.get().strip(),
                    lookback_days=days,workspace_url=url,ecm_title=name,ecm_search=ecm_search.get().strip(),
-                   v37_auto_time=schedule_time.get().strip())
+                   v37_auto_time=schedule_time.get().strip(),lme_enabled=bool(lme_enabled.get()))
         from datetime import date
         for value in (report_start.get(),report_end.get()):
             if value.strip():date.fromisoformat(value.strip())
@@ -228,6 +229,8 @@ def main_gui():
         launch('일일 자동 실행 등록',work)
     tk.Button(panel,text='자동 실행 등록',command=register_schedule,bg=SOFT,fg=BLUE,relief='flat').grid(row=10,column=2,sticky='w')
     L(panel,'권장 08:30 · Windows 로그인/네트워크 필요 · 누락 실행 보강 · 중복 실행 차단',size=9,color=MUTED).grid(row=11,column=0,columnspan=4,sticky='w')
+    ttk.Checkbutton(panel,text='Westmetall LME 니켈·구리 Cash/3개월·재고 함께 수집',
+                    variable=lme_enabled).grid(row=12,column=0,columnspan=4,sticky='w',pady=(8,0))
 
     lower=tk.Frame(root,bg=WHITE,padx=26,pady=8);lower.pack(fill='both',expand=True)
     note=ttk.Notebook(lower);note.pack(fill='both',expand=True)
@@ -297,7 +300,8 @@ def main_gui():
                         status.set('작업 취소 · 이전 DB 유지');continue
                     d=result['diag'];warnings=d.get('warnings',[])
                     details.set(f'FMB {result["prices"]}행 수집  |  SMBS '+str(d.get('fx',{}).get('collected','확인 필요'))+
-                                '건  |  Excel '+('생성·갱신' if d.get('workbook') else '실패')+f'  |  확인사항 {len(warnings)}건')
+                                '건  |  LME '+str(d.get('lme',{}).get('collected','미실행'))+
+                                 '건  |  Excel '+('생성·갱신' if d.get('workbook') else '실패')+f'  |  확인사항 {len(warnings)}건')
                     status.set(title+' 완료 · '+('주의사항을 확인하세요' if warnings else '시세 저장 완료'))
                     if warnings:
                         syslog('수집 확인사항: '+ ' / '.join(map(str,warnings))[:1200])
