@@ -8,6 +8,12 @@ on:
       - 'westmetall_lme.py'
       - 'lme_reporting.py'
       - 'test_v38_lme_report.py'
+      - 'test_v38_partial_revision.py'
+      - 'test_v37_recovery.py'
+      - 'FastmarketsCollector_v3_4.py'
+      - 'excel_secure.py'
+      - 'ecm_excel_sync.py'
+      - 'gui_v37.py'
       - '.github/workflows/market-regression.yml'
   workflow_dispatch:
 
@@ -29,5 +35,5 @@ jobs:
         run: python -m compileall -q smbs_rates.py series_mapping.py report_model.py pipeline_v37.py westmetall_lme.py lme_reporting.py
       - name: Focused market and LME tests
         run: python -m unittest discover -s . -p 'test_v38_*.py' -v
-      - name: Existing focused regressions
-        run: python -m unittest discover -s . -p 'test_v37_*.py' -v
+      - name: Full offline regressions (including delivery hotfix)
+        run: python -m unittest discover -s . -p 'test*.py' -v
