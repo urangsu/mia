@@ -262,89 +262,100 @@ def main_gui():
     L(footer,'Chrome 9444 / ECM 일반 Edge  ·  보안 문서 우회 없음  ·  ECM 서버 반영은 별도 확인',size=9,color=MUTED).pack(anchor='w')
 
     def pump():
-        while True:
-            try:item=q.get_nowait()
-            except Empty:break
-            typ=item[0]
-            if typ=='log':
-                msg=str(item[1]);syslog('GUI: '+msg)
-                log_widget.configure(state='normal');log_widget.insert('end',msg+'\n');log_widget.see('end');log_widget.configure(state='disabled')
-            elif typ=='snapshot':
-                try:
-                    from report_exports import display_value
-                    ctx=item[1]
-                    latest.delete(*latest.get_children())
-                    for table in ('보고용_금속시세','보고용_환율','보고용_시장지표'):
-                        rows=ctx.tables[table];headers=rows[0]
-                        for row in rows[1:]:
-                            data=dict(zip(headers,row))
-                            values=(data.get('종목',data.get('통화',data.get('지표'))),
-                                    data.get('Mid',data.get('매매기준율',data.get('수치'))),
-                                    data.get('단위'),data.get('고시일',data.get('시장일')),
-                                    data.get('출처'),data.get('상태',data.get('구분','고시')))
-                            latest.insert('', 'end',values=tuple(display_value(v) for v in values))
-                except Exception as exc:status.set('최신 시세 표시 불가: '+str(exc))
-            elif typ in ('done','fail'):
-                busy[0]=False
-                for b in running_buttons:b.configure(state='normal')
-                cancel_button.configure(state='disabled')
-                if typ=='fail':
-                    _,title,error=item;status.set(title+' 실패: '+error)
-                    syslog('오류: '+title+': '+error);messagebox.showerror(title,error[:1600]);continue
-                _,title,kind,result=item
-                if kind in ('collect','collect_ecm'):
-                    if result.get('cancelled'):
-                        status.set('작업 취소 · 이전 DB 유지');continue
-                    d=result['diag'];warnings=d.get('warnings',[])
-                    details.set(f'FMB {result["prices"]}행 수집  |  SMBS '+str(d.get('fx',{}).get('collected','확인 필요'))+
-                                '건  |  Excel '+('생성·갱신' if d.get('workbook') else '실패')+f'  |  확인사항 {len(warnings)}건')
-                    status.set(title+' 완료 · '+('주의사항을 확인하세요' if warnings else '시세 저장 완료'))
-                    if warnings:
-                        syslog('수집 확인사항: '+ ' / '.join(map(str,warnings))[:1200])
-                        messagebox.showwarning('수집 점검 필요',f'수집 경고 {len(warnings)}건. 누락 종목은 채우지 않습니다. collector.log와 진단 JSON 확인.')
-                    if kind=='collect_ecm':
-                        if d.get('fmb_failed'):
-                            messagebox.showwarning('ECM 자동 반영 보류','FMB 수집 실패로 전체 자료를 검증하지 못했습니다. 환율/DB는 유지되며 ECM은 별도 미리보기 버튼으로 확인하세요.')
-                        elif not d.get('workbook'):
-                            messagebox.showwarning('ECM 진행 보류','누적 Excel 갱신이 실패했습니다. ECM 반영을 시작하지 않습니다.')
-                        else:root.after(250,request_sync)
-                elif kind=='ecm_preview':
-                    pending['plan']=result
-                    stats=result['stats']
-                    status.set('ECM 변경사항 확인 완료 · 승인 대기')
-                    preview_text.configure(state='normal');preview_text.delete('1.0','end')
-                    preview_text.insert('end',f'대상: {result["workbook_name"]} / {result["sheet"]}\n')
-                    preview_text.insert('end',f'열린 실제 경로: {result["workbook_path"]}\n')
-                    preview_text.insert('end',f'날짜 행 +{stats["new_dates"]}; 품목 열 +{stats["new_columns"]}\n')
-                    preview_text.insert('end',f'신규/빈셀 {stats["fill"]}, 정정 {stats["correction"]}, 동일 {stats["unchanged"]}, 원본 미고시 {stats["missing_source"]}\n\n')
-                    for change in result['edits'][:180]:
-                        preview_text.insert('end',f'{change["date"]}  {change["header"]:20} '
-                                                 f'{str(change["previous"]):>12} -> {change["incoming"]:>12} '
-                                                 f'({change["decision"]})\n')
-                    preview_text.configure(state='disabled');note.select(previewtab)
-                    if not stats['fill'] and not stats['correction'] and not stats['new_columns'] and not stats['new_dates']:
-                        messagebox.showinfo('변경 없음','ECM은 DB와 동일하여 쓸 값이 없습니다.');continue
-                    if messagebox.askyesno('ECM Excel 변경 승인',
-                        f'파일: {result["workbook_name"]}\n'
-                        f'열린 경로: {result["workbook_path"]}\n'
-                        '이 경로가 ECM에서 연 실제 통합문서인지 확인하세요.\n\n'
-                        f'새 날짜 {stats["new_dates"]}행 / 새 항목 {stats["new_columns"]}열\n'
-                        f'입력 {stats["fill"]}건 / 기존 숫자 수정 {stats["correction"]}건\n\n'
-                        '기존 수식·타사 열은 유지합니다.\n'
-                        'Excel Save 이후에도 ECM 서버 반영 확인이 필요합니다.\n계속할까요?'):
-                        launch('ECM Excel 승인 후 저장',apply_ecm,'ecm_apply')
-                    else:status.set('ECM 미리보기만 완료 · 실제 Excel 변경 없음')
-                elif kind=='ecm_apply':
-                    status.set(f'ECM Excel 저장 {result["applied"]}셀 완료 · ECM 서버 반영은 별도 확인 필요')
-                    messagebox.showinfo('Excel 저장 완료 / ECM 서버 확인 필요',
-                        f'Excel 셀 {result["applied"]}건 저장 후 재읽기 확인 완료.\n'
-                        'ECM의 체크인/업로드·서버 반영 성공은 확인하지 못했습니다. ECM에서 변경내역을 열어 확인하세요.')
-                else:
-                    warnings=result.get('warnings',[]) if isinstance(result,dict) else []
-                    if warnings:
-                        for msg in warnings:syslog(str(msg))
-                    status.set(title+(' · 확인 필요: '+str(warnings[0]) if warnings else ' 완료'))
-        root.after(160,pump)
+        try:
+            while True:
+                try:item=q.get_nowait()
+                except Empty:break
+                typ=item[0]
+                if typ=='log':
+                    msg=str(item[1]);syslog('GUI: '+msg)
+                    log_widget.configure(state='normal');log_widget.insert('end',msg+'\n');log_widget.see('end');log_widget.configure(state='disabled')
+                elif typ=='snapshot':
+                    try:
+                        from report_exports import display_value
+                        ctx=item[1]
+                        latest.delete(*latest.get_children())
+                        for table in ('보고용_금속시세','보고용_환율','보고용_시장지표'):
+                            rows=ctx.tables[table];headers=rows[0]
+                            for row in rows[1:]:
+                                data=dict(zip(headers,row))
+                                values=(data.get('종목',data.get('통화',data.get('지표'))),
+                                        data.get('Mid',data.get('매매기준율',data.get('수치'))),
+                                        data.get('단위'),data.get('고시일',data.get('시장일')),
+                                        data.get('출처'),data.get('상태',data.get('구분','고시')))
+                                latest.insert('', 'end',values=tuple(display_value(v) for v in values))
+                    except Exception as exc:status.set('최신 시세 표시 불가: '+str(exc))
+                elif typ in ('done','fail'):
+                    busy[0]=False
+                    for b in running_buttons:b.configure(state='normal')
+                    cancel_button.configure(state='disabled')
+                    if typ=='fail':
+                        _,title,error=item;status.set(title+' 실패: '+error)
+                        syslog('오류: '+title+': '+error);messagebox.showerror(title,error[:1600]);continue
+                    _,title,kind,result=item
+                    if kind in ('collect','collect_ecm'):
+                        if result.get('cancelled'):
+                            status.set('작업 취소 · 이전 DB 유지');continue
+                        d=result['diag'];warnings=d.get('warnings',[])
+                        details.set(f'FMB {result["prices"]}행 수집  |  SMBS '+str((d.get('fx') or {}).get('collected','확인 필요'))+
+                                    '건  |  Excel '+('생성·갱신' if d.get('workbook') else '실패')+f'  |  확인사항 {len(warnings)}건')
+                        outcome={'complete':'완료','partial':'부분 완료','failed':'실패'}.get(d.get('status'),'상태 확인 필요')
+                        status.set(title+' '+outcome+' · '+('주의사항을 확인하세요' if warnings else '진단 상태를 확인하세요' if outcome!='완료' else '시세 저장 완료'))
+                        if warnings:
+                            syslog('수집 확인사항: '+ ' / '.join(map(str,warnings))[:1200])
+                            messagebox.showwarning('수집 점검 필요',f'수집 경고 {len(warnings)}건. 누락 종목은 채우지 않습니다. collector.log와 진단 JSON 확인.')
+                        if kind=='collect_ecm':
+                            if d.get('status')=='failed' or d.get('fmb_failed'):
+                                messagebox.showwarning('ECM 자동 반영 보류','FMB 수집 실패로 전체 자료를 검증하지 못했습니다. 환율/DB는 유지되며 ECM은 별도 미리보기 버튼으로 확인하세요.')
+                            elif not d.get('workbook'):
+                                messagebox.showwarning('ECM 진행 보류','누적 Excel 갱신이 실패했습니다. ECM 반영을 시작하지 않습니다.')
+                            else:root.after(250,request_sync)
+                    elif kind=='ecm_preview':
+                        pending['plan']=result
+                        stats=result['stats']
+                        status.set('ECM 변경사항 확인 완료 · 승인 대기')
+                        preview_text.configure(state='normal');preview_text.delete('1.0','end')
+                        preview_text.insert('end',f'대상: {result["workbook_name"]} / {result["sheet"]}\n')
+                        preview_text.insert('end',f'열린 실제 경로: {result["workbook_path"]}\n')
+                        preview_text.insert('end',f'날짜 행 +{stats["new_dates"]}; 품목 열 +{stats["new_columns"]}\n')
+                        preview_text.insert('end',f'신규/빈셀 {stats["fill"]}, 정정 {stats["correction"]}, 충돌 보류·비우기 {stats.get("cleared",0)}, 동일 {stats["unchanged"]}, 원본 미고시 {stats["missing_source"]}\n\n')
+                        for change in result['edits'][:180]:
+                            incoming='보류(값 비움)' if change['incoming'] is None else str(change['incoming'])
+                            decision={'quarantine':'충돌 보류','fill':'입력','correction':'정정'}.get(change['decision'],change['decision'])
+                            preview_text.insert('end',f'{change["date"]}  {change["header"]:20} '
+                                                     f'{str(change["previous"]):>12} -> {incoming:>12} '
+                                                     f'({decision})\n')
+                        preview_text.configure(state='disabled');note.select(previewtab)
+                        if not result['edits'] and not stats['new_columns'] and not stats['new_dates']:
+                            messagebox.showinfo('변경 없음','ECM은 DB와 동일하여 쓸 값이 없습니다.');continue
+                        if messagebox.askyesno('ECM Excel 변경 승인',
+                            f'파일: {result["workbook_name"]}\n'
+                            f'열린 경로: {result["workbook_path"]}\n'
+                            '이 경로가 ECM에서 연 실제 통합문서인지 확인하세요.\n\n'
+                            f'새 날짜 {stats["new_dates"]}행 / 새 항목 {stats["new_columns"]}열\n'
+                            f'입력 {stats["fill"]}건 / 기존 숫자 수정 {stats["correction"]}건\n\n'
+                            f'충돌 수치 보류로 기존 값 비우기 {stats.get("cleared",0)}건\n\n'
+                            '기존 수식·타사 열은 유지합니다.\n'
+                            'Excel Save 이후에도 ECM 서버 반영 확인이 필요합니다.\n계속할까요?'):
+                            launch('ECM Excel 승인 후 저장',apply_ecm,'ecm_apply')
+                        else:status.set('ECM 미리보기만 완료 · 실제 Excel 변경 없음')
+                    elif kind=='ecm_apply':
+                        status.set(f'ECM Excel 저장 {result["applied"]}셀 완료 · ECM 서버 반영은 별도 확인 필요')
+                        messagebox.showinfo('Excel 저장 완료 / ECM 서버 확인 필요',
+                            f'Excel 셀 {result["applied"]}건 저장 후 재읽기 확인 완료.\n'
+                            'ECM의 체크인/업로드·서버 반영 성공은 확인하지 못했습니다. ECM에서 변경내역을 열어 확인하세요.')
+                    else:
+                        warnings=result.get('warnings',[]) if isinstance(result,dict) else []
+                        if warnings:
+                            for msg in warnings:syslog(str(msg))
+                        status.set(title+(' · 확인 필요: '+str(warnings[0]) if warnings else ' 완료'))
+        except Exception as exc:
+            # Keep polling even if one queued result cannot be rendered.
+            status.set('상태 처리 오류: '+str(exc))
+            try:syslog('GUI 결과 처리 오류: '+str(exc))
+            except Exception:pass
+        finally:
+            root.after(160,pump)
     root.after(160,pump)
     threading.Thread(target=lambda:queue_snapshot(cfg['data_dir']),daemon=True).start()
     def close():
