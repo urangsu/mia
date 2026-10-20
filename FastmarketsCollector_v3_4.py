@@ -1616,13 +1616,13 @@ def save_sqlite(db: Path,prices: list[Price],inventory:list[dict],diagnostics:di
               unit,description,widget,price_mode,source,view_key,period_label)
               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
               ON CONFLICT(workspace_id,symbol,assessment_date,price_mode,unit,view_key)
-              DO UPDATE SET low=COALESCE(excluded.low,prices.low),mid=COALESCE(excluded.mid,prices.mid),high=COALESCE(excluded.high,prices.high),
-                change_pct=COALESCE(excluded.change_pct,prices.change_pct),description=CASE WHEN excluded.description='' THEN prices.description ELSE excluded.description END,widget=excluded.widget,
+              DO UPDATE SET low=excluded.low,mid=excluded.mid,high=excluded.high,
+                change_pct=excluded.change_pct,description=CASE WHEN excluded.description='' THEN prices.description ELSE excluded.description END,widget=excluded.widget,
                 source=excluded.source,period_label=excluded.period_label,collected_at=CURRENT_TIMESTAMP
-              WHERE (excluded.low IS NOT NULL AND excluded.low IS NOT prices.low)
-                 OR (excluded.mid IS NOT NULL AND excluded.mid IS NOT prices.mid)
-                 OR (excluded.high IS NOT NULL AND excluded.high IS NOT prices.high)
-                 OR (excluded.change_pct IS NOT NULL AND excluded.change_pct IS NOT prices.change_pct)
+              WHERE excluded.low IS NOT prices.low
+                 OR excluded.mid IS NOT prices.mid
+                 OR excluded.high IS NOT prices.high
+                 OR excluded.change_pct IS NOT prices.change_pct
                  OR (excluded.description!='' AND excluded.description IS NOT prices.description)
                  OR excluded.widget IS NOT prices.widget OR excluded.source IS NOT prices.source
                  OR excluded.period_label IS NOT prices.period_label""",
