@@ -336,7 +336,7 @@ def report_series_source(key: str) -> str:
     return 'SMBS' if key.startswith('FX_') else 'WESTMETALL' if key.startswith('LME|') else 'FMB'
 
 
-def prepare_excel_series(fmb_prices, fx_quotes, *, issues=None, quarantined=None):
+def prepare_excel_series(fmb_prices, fx_quotes, *, issues=None, quarantined=None, known_withdrawals=()):
     """Condense widget-specific observations into stable product/field columns.
 
     RawData retains every view. Different same-date values are quarantined,
@@ -387,7 +387,9 @@ def prepare_excel_series(fmb_prices, fx_quotes, *, issues=None, quarantined=None
             elif p.symbol in ('MB-LI-0029','MB-LI-0033') and p.unit.replace(' ','').lower() in ('$/kg','usd/kg'):
                 number=number*Decimal(1000)
             candidates[(p.date,key)].append((number,bounded,p.view_key,converted_panel))
-    for dt,key in sorted(missing_mids - valid_mids):
+    # Only a *proven historical withdrawal* may clear an existing Excel cell.
+    # An entirely new unquoted date must not manufacture an empty report row.
+    for dt,key in sorted((missing_mids - valid_mids) & set(known_withdrawals)):
         quarantined.append((dt,key,'부분 가격 정정으로 Mid 누락; 이전 값 자동 비우기'))
         issues.append(f'{dt} {key}: Mid 미고시/불완전 정정으로 보고값 보류')
     for (dt,key),samples in candidates.items():
@@ -405,10 +407,8 @@ def prepare_excel_series(fmb_prices, fx_quotes, *, issues=None, quarantined=None
                     continue
                 if not (low<=mid<=high):
                     quarantined.append((dt,key,'레거시 가격 Low/Mid/High 불일치'))
-                    issues.append(f'{dt} {key}: 원본 범위 Low <= Mid <= High 불일치; 반영 보류')
+                    issues.append(f'{dt} {key}: 원본 범위 충돌(Low <= Mid <= High 불일치); 반영 보류')
                     break
-            else:
-                pass
             if any(d==dt and k==key and why=='레거시 가격 Low/Mid/High 불일치'
                    for d,k,why in quarantined):
                 continue
@@ -429,7 +429,6 @@ def prepare_excel_series(fmb_prices, fx_quotes, *, issues=None, quarantined=None
             values[dt][key]=float(canonical);continue
         quarantined.append((dt,key,'서로 다른 뷰 가격 충돌'))
         issues.append(f'{dt} {key}: 서로 다른 뷰 가격 충돌 {sorted(str(v) for v in uniques)}; 일별시세 반영 보류')
-        quarantined.append((dt,key,'서로 다른 뷰 가격 충돌'))
     fx_candidates=defaultdict(list)
     for q in fx_quotes:
         fx_candidates[(q.quote_date,q.currency,q.unit)].append(q)
