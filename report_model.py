@@ -85,7 +85,7 @@ def build_context(folder,start=None,end=None,series=None,*,synthetic=False,works
     selected=set(series) if series is not None else None
     if isinstance(series,str):selected={series}
     def chosen(code,key=None):return selected is None or code in selected or key in selected
-    warnings=[];raw={name:[] for name in ('prices','fx_rates','market_indicators','equity_rank_snapshots','lme_quotes')}
+    warnings=[];raw={name:[] for name in ('prices','price_revisions','fx_rates','market_indicators','equity_rank_snapshots','lme_quotes')}
     db=core.path_bundle(folder)['db']
     if db.exists():
         with closing(sqlite3.connect(db.resolve().as_uri()+'?mode=ro',uri=True)) as cx:
@@ -132,8 +132,25 @@ def build_context(folder,start=None,end=None,series=None,*,synthetic=False,works
             dest.append(r)
             observations.append((r.get('captured_at'),False))
     prices.sort(key=lambda p:(p.date,p.symbol,p.view_key),reverse=True)
-    records=prepare_excel_series(prices,quotes,issues=warnings)
-    sheets=make_sheets(prices,core.latest_quotes(prices,today=date.fromisoformat(end)),quotes)
+    # Revisions are the only authoritative evidence that a previously reported
+    # Mid was withdrawn. An unquoted first observation is NOT a withdrawal.
+    withdrew=set()
+    current={(p.symbol,p.date,p.unit,p.price_mode,p.view_key):p for p in prices}
+    for audit in raw['price_revisions']:
+        if audit.get('workspace_id')!=active:continue
+        try:
+            old_values=json.loads(audit['old_values'])
+            new_values=json.loads(audit['new_values'])
+            identity=(audit['symbol'],audit['assessment_date'],audit['unit'],
+                      audit['price_mode'],audit['view_key'])
+            last=current.get(identity)
+            if last is not None and last.mid is None and old_values[1] is not None and new_values[1] is None:
+                withdrew.add((last.date,f'FMB|{last.symbol}|{last.unit}|{last.price_mode}|MID'))
+        except (KeyError,IndexError,TypeError,ValueError,json.JSONDecodeError):
+            warnings.append('가격 정정 감사기록을 해석하지 못해 기존 가격의 자동 비우기를 보류합니다.')
+    records=prepare_excel_series(prices,quotes,issues=warnings,known_withdrawals=withdrew)
+    sheets=make_sheets(prices,core.latest_quotes(prices,today=date.fromisoformat(end)),
+                       quotes,known_withdrawals=withdrew)
     sheets['워크스페이스원본']=[('workspace_id','symbol','assessment_date','low','mid','high','unit','price_mode','view_key','source','collected_at')]+provenance
     # Raw NAVER observations retain each actual market date; stock ranks never join daily columns.
     naver_keys=sorted({f"NAVER|{r['instrument_id']}|{r['unit']}|Actual|MID" for r in indicators})
