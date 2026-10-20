@@ -333,24 +333,34 @@ def report_series_label(key: str) -> str:
 
 
 def report_series_source(key: str) -> str:
-    return 'SMBS' if key.startswith('FX_') else 'FMB'
+    return 'SMBS' if key.startswith('FX_') else 'WESTMETALL' if key.startswith('LME|') else 'FMB'
 
 
-def prepare_excel_series(fmb_prices, fx_quotes, *, issues=None):
+def prepare_excel_series(fmb_prices, fx_quotes, *, issues=None, quarantined=None, known_withdrawals=()):
     """Condense widget-specific observations into stable product/field columns.
 
-    RawData retains every view. When two views claim different same-date price values,
-    only trust a value demonstrably bounded by the very same view's low/high; otherwise
-    quarantine that daily cell instead of silently guessing or creating duplicate columns.
+    RawData retains every view. Different same-date values are quarantined,
+    never resolved by picking a bounded view. Optional quarantined entries
+    identify cells whose previously exported numeric values must be withdrawn.
     This is intentionally NOT a DB migration.
     """
     from collections import defaultdict, Counter
     issues=issues if issues is not None else []
+    quarantined=quarantined if quarantined is not None else []
     values=defaultdict(dict)
     candidates=defaultdict(list)
+    # A partial same-view revision may replace a previously valid Mid with NULL.
+    # Keep that series identity and explicitly withdraw a stale exported value.
+    missing_mids=set()
+    valid_mids=set()
     for p in fmb_prices:
         if p.price_mode not in ('Actual','Unspecified','Forecast') or p.period_label:
             continue
+        mid_key=f'FMB|{p.symbol}|{p.unit}|{p.price_mode}|MID'
+        if p.mid is None and (p.low is not None or p.high is not None):
+            missing_mids.add((p.date,mid_key))
+        elif p.mid is not None:
+            valid_mids.add((p.date,mid_key))
         for field in ('mid','low','high'):
             val=getattr(p,field)
             if val is None:continue
@@ -364,11 +374,60 @@ def prepare_excel_series(fmb_prices, fx_quotes, *, issues=None):
                     low=Decimal(str(p.low));high=Decimal(str(p.high))
                     bounded=low<=number<=high and low<=high
                 except (InvalidOperation,ValueError):pass
-            candidates[(p.date,key)].append((number,bounded,p.view_key))
+            # Unit normalization is a REPORT projection, not a mutation of SQLite RawData.
+            # Two cobalt panels can share the SAME MB-CO-0005/$/lb description,
+            # while the display toggle on one panel renders already-converted $/tonne.
+            # Trust canonical lb observations; reject converted-only observations.
+            converted_panel=False
+            if p.symbol=='MB-CO-0005' and p.unit.replace(' ','').lower() in ('$/lb','usd/lb'):
+                if number >= Decimal('1000'):
+                    converted_panel=True
+                else:
+                    number=(number*Decimal('2204.62262185')).quantize(Decimal('0.01'))
+            elif p.symbol in ('MB-LI-0029','MB-LI-0033') and p.unit.replace(' ','').lower() in ('$/kg','usd/kg'):
+                number=number*Decimal(1000)
+            candidates[(p.date,key)].append((number,bounded,p.view_key,converted_panel))
+    # Only a *proven historical withdrawal* may clear an existing Excel cell.
+    # An entirely new unquoted date must not manufacture an empty report row.
+    for dt,key in sorted((missing_mids - valid_mids) & set(known_withdrawals)):
+        quarantined.append((dt,key,'부분 가격 정정으로 Mid 누락; 이전 값 자동 비우기'))
+        issues.append(f'{dt} {key}: Mid 미고시/불완전 정정으로 보고값 보류')
     for (dt,key),samples in candidates.items():
-        uniques={num for num,_,_ in samples}
+        # A single view with old incompatible low/high/mid can have been persisted
+        # by the legacy COALESCE upsert. Do not present the inconsistent Mid.
+        if key.endswith('|MID'):
+            for row in fmb_prices:
+                if (row.date!=dt or
+                    f'FMB|{row.symbol}|{row.unit}|{row.price_mode}|MID'!=key or
+                    row.mid is None or row.low is None or row.high is None):
+                    continue
+                try:
+                    mid=Decimal(str(row.mid));low=Decimal(str(row.low));high=Decimal(str(row.high))
+                except (InvalidOperation,TypeError,ValueError):
+                    continue
+                if not (low<=mid<=high):
+                    quarantined.append((dt,key,'레거시 가격 Low/Mid/High 불일치'))
+                    issues.append(f'{dt} {key}: 원본 범위 충돌(Low <= Mid <= High 불일치); 반영 보류')
+                    break
+            if any(d==dt and k==key and why=='레거시 가격 Low/Mid/High 불일치'
+                   for d,k,why in quarantined):
+                continue
+        is_cobalt=key.startswith('FMB|MB-CO-0005|') and '|$/lb|' in key.replace(' ','')
+        originals=[v for v,_,_,converted in samples if not converted]
+        converted=[v for v,_,_,is_converted in samples if is_converted]
+        if is_cobalt and converted and not originals:
+            quarantined.append((dt,key,'원본 파운드 가격 미검증'))
+            issues.append(f'{dt} {key}: Tonne 변환 위젯만 발견; 원본 $/lb 확인 전 보고 반영 보류')
+            continue
+        uniques=set(originals if is_cobalt else [v for v,_,_,_ in samples])
         if len(uniques)==1:
-            values[dt][key]=float(next(iter(uniques)));continue
+            canonical=next(iter(uniques))
+            if converted and any(abs(v-canonical)>Decimal('0.02') for v in converted):
+                quarantined.append((dt,key,'Tonne 변환 위젯 교차 검증 불일치'))
+                issues.append(f'{dt} {key}: 원본 대비 Tonne 위젯 검산 불일치; 반영 보류')
+                continue
+            values[dt][key]=float(canonical);continue
+        quarantined.append((dt,key,'서로 다른 뷰 가격 충돌'))
         issues.append(f'{dt} {key}: 서로 다른 뷰 가격 충돌 {sorted(str(v) for v in uniques)}; 일별시세 반영 보류')
     fx_candidates=defaultdict(list)
     for q in fx_quotes:
@@ -382,6 +441,7 @@ def prepare_excel_series(fmb_prices, fx_quotes, *, issues=None):
         if len(pairs)!=1 or not finite:
             sources=', '.join(sorted({q.source for q in samples}))
             issues.append(f'{dt} {key}: 환율 출처 충돌 또는 비정상 수치 ({sources}); 매매기준율·전일대비 반영 보류')
+            quarantined.append((dt,key,'환율 출처 충돌 또는 비정상 수치'))
             continue
         rate,difference=next(iter(pairs))
         values[dt][key]=float(rate)

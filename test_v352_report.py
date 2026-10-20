@@ -7,13 +7,16 @@ from smbs_rates import FXQuote
 
 
 def p(symbol, date, price_mode='Actual', mid='10', low='9', high='11'):
+    # Synthetic quotes must satisfy low <= Mid <= high; otherwise the real
+    # collector correctly quarantines them rather than reporting a fabricated price.
+    if mid is not None and float(mid)>float(high): high=str(float(mid)+1)
     return SimpleNamespace(symbol=symbol,date=date,unit='USD/t',price_mode=price_mode,
                            period_label='',view_key='view',mid=mid,low=low,high=high,
                            change_pct=None,description='description',widget='grid',source='FMB')
 
 class V352ReportTests(unittest.TestCase):
     def test_mid_only_and_forecast_then_actual(self):
-        rows=[p('MB-CO-0005','2026-10-16',mid='100'),
+        rows=[p('MB-CO-0005','2026-10-16',mid='100', high='110'),
               p('MB-LI-0029','2026-10-16',price_mode='Forecast',mid='12'),
               p('MB-LI-0029','2026-10-16',price_mode='Actual',mid='10')]
         sheets=make_sheets(rows,[],[])

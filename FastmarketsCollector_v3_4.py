@@ -152,6 +152,10 @@ def stored_symbols(folder,workspace_id=None):
     db = path_bundle(folder)['db']
     if not db.exists(): return []
     with closing(sqlite3.connect(db)) as cx:
+        # v3.7 creates its run ledger before the first FMB save. The database
+        # can therefore exist legitimately without an instruments table yet.
+        if not cx.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='instruments'").fetchone():
+            return []
         return [r[0] for r in cx.execute('SELECT DISTINCT symbol FROM instruments WHERE workspace_id=?', (workspace_id,))]
 
 
@@ -1369,7 +1373,10 @@ class ChromeSession:
         started=time.perf_counter()
         d=self.connect()
         if not self.workspace_is_open():
-            if not self.open_workspace(*credentials_get(),wait_seconds=8):
+            # Warm 9444 sessions skip authentication entirely. Cold SSO/MFA may
+            # need longer than eight seconds; do not re-login or reload repeatedly.
+            login_wait=min(90,max(8,int(config_load().get('login_wait_seconds',30))))
+            if not self.open_workspace(*credentials_get(),wait_seconds=login_wait):
                 raise SessionError("기획재무그룹 작업공간에 로그인되지 않았습니다.")
         self.notify(f"FMB 작업공간 위젯 탐색: {current_workspace()[1]} (기본 작업공간 {WORKSPACE_ID})")
         try:
@@ -1609,13 +1616,13 @@ def save_sqlite(db: Path,prices: list[Price],inventory:list[dict],diagnostics:di
               unit,description,widget,price_mode,source,view_key,period_label)
               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
               ON CONFLICT(workspace_id,symbol,assessment_date,price_mode,unit,view_key)
-              DO UPDATE SET low=COALESCE(excluded.low,prices.low),mid=COALESCE(excluded.mid,prices.mid),high=COALESCE(excluded.high,prices.high),
-                change_pct=COALESCE(excluded.change_pct,prices.change_pct),description=CASE WHEN excluded.description='' THEN prices.description ELSE excluded.description END,widget=excluded.widget,
+              DO UPDATE SET low=excluded.low,mid=excluded.mid,high=excluded.high,
+                change_pct=excluded.change_pct,description=CASE WHEN excluded.description='' THEN prices.description ELSE excluded.description END,widget=excluded.widget,
                 source=excluded.source,period_label=excluded.period_label,collected_at=CURRENT_TIMESTAMP
-              WHERE (excluded.low IS NOT NULL AND excluded.low IS NOT prices.low)
-                 OR (excluded.mid IS NOT NULL AND excluded.mid IS NOT prices.mid)
-                 OR (excluded.high IS NOT NULL AND excluded.high IS NOT prices.high)
-                 OR (excluded.change_pct IS NOT NULL AND excluded.change_pct IS NOT prices.change_pct)
+              WHERE excluded.low IS NOT prices.low
+                 OR excluded.mid IS NOT prices.mid
+                 OR excluded.high IS NOT prices.high
+                 OR excluded.change_pct IS NOT prices.change_pct
                  OR (excluded.description!='' AND excluded.description IS NOT prices.description)
                  OR excluded.widget IS NOT prices.widget OR excluded.source IS NOT prices.source
                  OR excluded.period_label IS NOT prices.period_label""",

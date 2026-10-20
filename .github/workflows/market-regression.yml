@@ -1,0 +1,41 @@
+name: Market conversion and LME regression
+on:
+  pull_request:
+    paths:
+      - 'smbs_rates.py'
+      - 'series_mapping.py'
+      - 'report_model.py'
+      - 'westmetall_lme.py'
+      - 'lme_reporting.py'
+      - 'test_v38_lme_report.py'
+      - 'test_v38_partial_revision.py'
+      - 'test_v38_reference_contracts.py'
+      - 'test_v37_recovery.py'
+      - 'docs/REFERENCE_PROJECTS_AND_ADOPTION_20261020.md'
+      - 'FastmarketsCollector_v3_4.py'
+      - 'excel_secure.py'
+      - 'ecm_excel_sync.py'
+      - 'gui_v37.py'
+      - '.github/workflows/market-regression.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Compile project modules
+        run: python -m compileall -q smbs_rates.py series_mapping.py report_model.py pipeline_v37.py westmetall_lme.py lme_reporting.py
+      - name: Focused market and LME tests
+        run: python -m unittest discover -s . -p 'test_v38_*.py' -v
+      - name: Full offline regressions (including delivery hotfix)
+        run: python -m unittest discover -s . -p 'test*.py' -v

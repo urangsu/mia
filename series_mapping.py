@@ -60,4 +60,8 @@ def catalogue_description(key: str, description: str = '') -> str:
     p=key.split('|')
     unit=p[2] if len(p)>2 else ''
     mode=p[3] if len(p)>3 else ''
-    return f'{description_key(description)} | 단위 {unit} | {mode}'
+    if len(p)>2 and p[0]=='FMB' and p[1] in ('MB-CO-0005','MB-LI-0029','MB-LI-0033'):
+        factor='× 2204.62262185' if p[1]=='MB-CO-0005' and unit.replace(' ','')=='$/lb' else '× 1000' if unit.replace(' ','')=='$/kg' else ''
+        if factor:
+            return f'{description_key(description)} | 원본 단위 {unit}; 일별·월별/보고용 USD/tonne ({factor}) | {mode}'
+    return f'{description_key(description)} | 원본·보고 단위 {unit} | {mode}'

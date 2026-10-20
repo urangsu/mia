@@ -146,6 +146,19 @@ def run_collection(settings,browser,cancelled,logger=print):
             diag['fx'],_=stage('fx',fx)
             if checkpoint():return output
 
+            # Public Westmetall HTML is independent of the subscribed FMB browser.
+            # A blocked/offline source must never roll back FMB or SMBS SQLite data.
+            if settings.get('lme_enabled',True):
+                def lme():
+                    from westmetall_lme import collect_and_save
+                    return collect_and_save(db,
+                        lookback_days=max(35,int(settings.get('lookback_days',31))),
+                        logger=logger)
+                diag['lme'],_=stage('lme',lme)
+            else:
+                diag['lme']={'status':'disabled'}
+            if checkpoint():return output
+
             if settings.get('naver_enabled',True):
                 def naver():
                     driver=browser.driver
