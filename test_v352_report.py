@@ -13,8 +13,10 @@ def p(symbol, date, price_mode='Actual', mid='10', low='9', high='11'):
 
 class V352ReportTests(unittest.TestCase):
     def test_mid_only_and_forecast_then_actual(self):
-        rows=[p('MB-CO-0005','2026-10-16',mid='100'),
-              p('MB-LI-0029','2026-10-16',price_mode='Forecast',mid='12'),
+        # Keep synthetic ranges consistent with each Mid; range conflicts have
+        # their own quarantine regressions in test_functional_core.
+        rows=[p('MB-CO-0005','2026-10-16',mid='100',low='99',high='101'),
+              p('MB-LI-0029','2026-10-16',price_mode='Forecast',mid='12',low='11',high='13'),
               p('MB-LI-0029','2026-10-16',price_mode='Actual',mid='10')]
         sheets=make_sheets(rows,[],[])
         header=sheets['일별시세'][0]
@@ -26,7 +28,7 @@ class V352ReportTests(unittest.TestCase):
         self.assertEqual(len(sheets['RawData']),4)
     def test_report_omits_low_high_only_dates(self):
         rows=[p('MB-LI-0029','2026-10-15',mid=None),
-              p('MB-LI-0029','2026-10-16',mid='15')]
+              p('MB-LI-0029','2026-10-16',mid='15',low='14',high='16')]
         sheets=make_sheets(rows,[],[])
         self.assertEqual(len(sheets['일별시세']),3)
         self.assertEqual(sheets['일별시세'][2][0],'2026-10-16')

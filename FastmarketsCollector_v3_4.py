@@ -37,7 +37,7 @@ WORKSPACE_URL = (f"https://dashboard.fastmarkets.com/w/{WORKSPACE_ID}/"
 
 def verify_workspace_url(url):
     parsed=urlparse(str(url).strip())
-    if parsed.scheme!='https' or parsed.hostname!='dashboard.fastmarkets.com' or parsed.port is not None:
+    if parsed.scheme!='https' or parsed.hostname!='dashboard.fastmarkets.com' or parsed.port is not None or parsed.username or parsed.password:
         raise ValueError('Fastmarkets 대시보드 URL은 https://dashboard.fastmarkets.com 도메인만 허용합니다.')
     m=re.fullmatch(r'/w/([a-zA-Z0-9_-]{12,80})(?:/[^?#]*)?',parsed.path)
     if not m:raise ValueError('Fastmarkets 작업공간 URL 형식이 아닙니다.')
@@ -79,20 +79,13 @@ RANGE_RE = re.compile(r"^\s*([+-]?[\d,]+(?:\.\d+)?)\s*(?:-|–|—|to)\s*([+-]?[
 def config_load() -> dict:
     defaults = {"data_dir": str(DEFAULT_DATA), "lookback_days": 31, "auto_time": "08:30", "workbook_path":"", "workspace_url":WORKSPACE_URL, "ecm_search":"금속 가격 현황", "ecm_title":"(리뉴얼)금속 가격 현황", "maximize_chrome":True}
     defaults['v37_auto_time']='08:30'
-    try:
-        data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-        if isinstance(data, dict):
-            defaults.update({k: data[k] for k in defaults if k in data})
-    except (OSError, ValueError, TypeError):
-        pass
-    return defaults
+    from app_settings import load
+    return load(CONFIG_PATH, defaults)
 
 
 def config_save(data: dict):
-    APP_HOME.mkdir(parents=True, exist_ok=True)
-    tmp = CONFIG_PATH.with_suffix(".tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-    tmp.replace(CONFIG_PATH)
+    from app_settings import save
+    save(CONFIG_PATH, data)
 
 
 def path_bundle(folder: Path) -> dict[str, Path]:
@@ -152,6 +145,10 @@ def stored_symbols(folder,workspace_id=None):
     db = path_bundle(folder)['db']
     if not db.exists(): return []
     with closing(sqlite3.connect(db)) as cx:
+        # v3.7 creates its run ledger before the first FMB save. The database
+        # can therefore exist legitimately without an instruments table yet.
+        if not cx.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='instruments'").fetchone():
+            return []
         return [r[0] for r in cx.execute('SELECT DISTINCT symbol FROM instruments WHERE workspace_id=?', (workspace_id,))]
 
 
@@ -1116,8 +1113,9 @@ def _driver_diagnostic(stage, chrome_binary, driver_path=None, error=None):
 
 
 class ChromeSession:
-    def __init__(self, notify=None):
+    def __init__(self, notify=None, driver_path=None):
         self.driver = None
+        self.driver_path = driver_path
         self.notify = notify or (lambda msg: None)
         self._listener_checked_at=0
         self._listener_cache=None
@@ -1238,7 +1236,7 @@ class ChromeSession:
         # Selenium Manager uses this exact executable to resolve driver compatibility.
         if chrome_binary:
             opts.binary_location = chrome_binary
-        driver_override = os.environ.get(DRIVER_OVERRIDE_ENV, "").strip().strip('"')
+        driver_override = str(self.driver_path or os.environ.get(DRIVER_OVERRIDE_ENV, "")).strip().strip('"')
         service = None
         driver_path = None
         try:
@@ -1605,21 +1603,38 @@ def save_sqlite(db: Path,prices: list[Price],inventory:list[dict],diagnostics:di
                  VALUES(?,?,?,?) ON CONFLICT(workspace_id,symbol,description,unit)
                  DO UPDATE SET last_seen=CURRENT_TIMESTAMP""",(workspace_id,code,desc,unit))
         for p in prices:
+            carried_mid = p.mid
+            if carried_mid is None:
+                previous = cx.execute('''SELECT low,mid,high FROM prices WHERE
+                    workspace_id=? AND symbol=? AND assessment_date=? AND price_mode=? AND unit=? AND view_key=?''',
+                    (workspace_id,p.symbol,p.date,p.price_mode,p.unit,p.view_key)).fetchone()
+                if previous and previous[1] is not None:
+                    carried_mid = previous[1]
+                    low = p.low if p.low is not None else previous[0]
+                    high = p.high if p.high is not None else previous[2]
+                    if p.low is not None or p.high is not None:
+                        try:
+                            m = Decimal(str(carried_mid))
+                            if ((low is not None and m < Decimal(str(low))) or
+                                (high is not None and m > Decimal(str(high)))):
+                                carried_mid = None
+                        except (InvalidOperation, ValueError):
+                            carried_mid = None
             cx.execute("""INSERT INTO prices(workspace_id,symbol,assessment_date,low,mid,high,change_pct,
               unit,description,widget,price_mode,source,view_key,period_label)
               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
               ON CONFLICT(workspace_id,symbol,assessment_date,price_mode,unit,view_key)
-              DO UPDATE SET low=COALESCE(excluded.low,prices.low),mid=COALESCE(excluded.mid,prices.mid),high=COALESCE(excluded.high,prices.high),
+              DO UPDATE SET low=COALESCE(excluded.low,prices.low),mid=excluded.mid,high=COALESCE(excluded.high,prices.high),
                 change_pct=COALESCE(excluded.change_pct,prices.change_pct),description=CASE WHEN excluded.description='' THEN prices.description ELSE excluded.description END,widget=excluded.widget,
                 source=excluded.source,period_label=excluded.period_label,collected_at=CURRENT_TIMESTAMP
               WHERE (excluded.low IS NOT NULL AND excluded.low IS NOT prices.low)
-                 OR (excluded.mid IS NOT NULL AND excluded.mid IS NOT prices.mid)
+                 OR excluded.mid IS NOT prices.mid
                  OR (excluded.high IS NOT NULL AND excluded.high IS NOT prices.high)
                  OR (excluded.change_pct IS NOT NULL AND excluded.change_pct IS NOT prices.change_pct)
                  OR (excluded.description!='' AND excluded.description IS NOT prices.description)
                  OR excluded.widget IS NOT prices.widget OR excluded.source IS NOT prices.source
                  OR excluded.period_label IS NOT prices.period_label""",
-                (workspace_id,p.symbol,p.date,p.low,p.mid,p.high,p.change_pct,p.unit,p.description,
+                (workspace_id,p.symbol,p.date,p.low,carried_mid,p.high,p.change_pct,p.unit,p.description,
                  p.widget,p.price_mode,p.source,p.view_key,p.period_label))
         cx.execute("""INSERT INTO collection_runs(workspace_id,widget_count,series_count,price_count,warnings)
           VALUES(?,?,?,?,?)""",(workspace_id,diagnostics["widget_count"],len(diagnostics["found_symbols"]),
