@@ -12,7 +12,7 @@ import json
 import sqlite3
 import math
 
-REPORT_NAMES=('보고용_금속시세','보고용_환율','보고용_시장지표','증시_시총스냅샷','보고용_시총','보고용_종합')
+REPORT_NAMES=('보고용_금속시세','보고용_환율','보고용_시장지표','증시_시총스냅샷','보고용_시총','보고용_종합','보고용_최근5일','보고용_3개월평균','보고용_문구')
 
 def _freeze_tables(tables):
     return MappingProxyType({k:tuple(tuple(row) for row in rows) for k,rows in tables.items()})
@@ -85,7 +85,7 @@ def build_context(folder,start=None,end=None,series=None,*,synthetic=False,works
     selected=set(series) if series is not None else None
     if isinstance(series,str):selected={series}
     def chosen(code,key=None):return selected is None or code in selected or key in selected
-    warnings=[];raw={name:[] for name in ('prices','fx_rates','market_indicators','equity_rank_snapshots')}
+    warnings=[];raw={name:[] for name in ('prices','fx_rates','market_indicators','equity_rank_snapshots','lme_quotes')}
     db=core.path_bundle(folder)['db']
     if db.exists():
         with closing(sqlite3.connect(db.resolve().as_uri()+'?mode=ro',uri=True)) as cx:
@@ -156,6 +156,12 @@ def build_context(folder,start=None,end=None,series=None,*,synthetic=False,works
         for name,count in (('월별시세',False),('월별건수',True)):
             sheets[name]=[('기준월',)+sheets['일별시세'][0][1:],sheets['일별시세'][1]]+[
                 tuple([month]+[(len(acc[month][i]) if count else sum(acc[month][i])/len(acc[month][i])) if acc[month][i] else (0 if count else None) for i in range(len(sheets['일별시세'][0])-1)]) for month in sorted(acc)]
+    from lme_reporting import add_lme_sheets, build_business_tables, report_unit
+    lme_rows=[r for r in raw['lme_quotes'] if dated(r,'price_date') and (
+        selected is None or any(s in selected for s in (
+            r['metal'], 'LME|'+r['metal']+'|CASH|USD/t',
+            'LME|'+r['metal']+'|STOCK|tonne')))]
+    add_lme_sheets(sheets,lme_rows,selected=selected)
     def latest(rows,key):
         result={}
         for r in sorted(rows,key=lambda r:(r['market_date'],r['captured_at'])):result[r[key]]=r
@@ -167,7 +173,15 @@ def build_context(folder,start=None,end=None,series=None,*,synthetic=False,works
         key=f'FMB|{p.symbol}|{p.unit}|{p.price_mode}|MID'
         identities.setdefault(key,p)
     for key,p in sorted(identities.items()):
-        metals.append((p.symbol,p.date,records.get(p.date,{}).get(key),p.unit,p.price_mode,p.source))
+        metals.append((p.symbol,p.date,records.get(p.date,{}).get(key),report_unit(key,p.unit),p.price_mode,p.source))
+    latest_lme={}
+    for record in sorted(lme_rows,key=lambda r:r['price_date']):
+        latest_lme[record['metal']]=record
+    for metal in ('NI','CU'):
+        record=latest_lme.get(metal)
+        if record:
+            metals.append(('LME '+metal,record['price_date'],_number(record['cash_usd_t']),
+                           'USD/tonne','Cash Settlement','WESTMETALL'))
     fx=[('통화','고시일','매매기준율','전일대비','단위','출처')]
     latest_fx={}
     for q in sorted(quotes,key=lambda q:q.quote_date):
@@ -212,7 +226,10 @@ def build_context(folder,start=None,end=None,series=None,*,synthetic=False,works
             warnings.append(r['stock_code']+': 시총 단위 미확인, 보고 수치 반영 보류')
             value=None
         cap.append((r['rank'],r['name'],r['stock_code'],r['market_date'],value,cap_unit or '미확인',r['status'],r['source_url']))
-    tables=dict(zip(REPORT_NAMES,(metals,fx,market,raw_cap,cap,[('구분','종목','시장·고시일','수치','단위','상태','출처')])))
+    tables=dict(zip(REPORT_NAMES[:6],(metals,fx,market,raw_cap,cap,[('구분','종목','시장·고시일','수치','단위','상태','출처')])))
+    extra_reports=build_business_tables(sheets,end)
+    sheets.update(extra_reports)
+    tables.update(extra_reports)
     for table,name in (('market_indicators','NAVER_지표원본'),('equity_rank_snapshots','NAVER_시총원본')):
         selected_raw=naver_selected[table]
         if selected_raw:
@@ -223,7 +240,8 @@ def build_context(folder,start=None,end=None,series=None,*,synthetic=False,works
     for row in market[1:]:tables['보고용_종합'].append(('시장지표',row[0],row[1],row[2],row[7],row[8],row[9]))
     for row in cap[1:]:tables['보고용_종합'].append(('시총',row[2],row[3],row[4],row[5],row[6],row[7]))
     sheets.update(tables)
-    source_dates={'FMB':tuple(sorted({p.date for p in prices})), 'SMBS':tuple(sorted({q.quote_date for q in quotes})), 'NAVER 지표':tuple(sorted({r['market_date'] for r in indicators})), 'NAVER 시총':tuple(sorted({r['market_date'] for r in equities}))}
+    source_dates={'FMB':tuple(sorted({p.date for p in prices})), 'SMBS':tuple(sorted({q.quote_date for q in quotes})), 'NAVER 지표':tuple(sorted({r['market_date'] for r in indicators})), 'NAVER 시총':tuple(sorted({r['market_date'] for r in equities})),
+                  'LME':tuple(sorted({r['price_date'] for r in lme_rows}))}
     context=ReportContext('',_data_as_of(observations), 'TEST / 합성 데이터' if synthetic else '시장 수치 보고서',_freeze_tables(tables),MappingProxyType(source_dates),tuple(dict.fromkeys(warnings)),active,start,end,_freeze_tables(sheets))
     from dataclasses import replace
     payload=context.to_dict();payload.pop('snapshot_id')
