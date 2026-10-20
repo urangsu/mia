@@ -1369,7 +1369,10 @@ class ChromeSession:
         started=time.perf_counter()
         d=self.connect()
         if not self.workspace_is_open():
-            if not self.open_workspace(*credentials_get(),wait_seconds=8):
+            # Warm 9444 sessions skip authentication entirely. Cold SSO/MFA may
+            # need longer than eight seconds; do not re-login or reload repeatedly.
+            login_wait=min(90,max(8,int(config_load().get('login_wait_seconds',30))))
+            if not self.open_workspace(*credentials_get(),wait_seconds=login_wait):
                 raise SessionError("기획재무그룹 작업공간에 로그인되지 않았습니다.")
         self.notify(f"FMB 작업공간 위젯 탐색: {current_workspace()[1]} (기본 작업공간 {WORKSPACE_ID})")
         try:
