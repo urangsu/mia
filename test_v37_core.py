@@ -89,7 +89,7 @@ class Core37Tests(unittest.TestCase):
         ws=wb.Worksheets.return_value;ws.ProtectContents=False
         @contextmanager
         def attach(*a,**kw):yield wb
-        with patch.object(ecm,'_attached_excel',attach),patch.object(ecm,'_snapshot_from_db',return_value=(rows,cat)), \
+        with patch.object(ecm,'_attached_excel',attach),patch.object(ecm,'_snapshot_from_db',return_value=(rows,cat,[])), \
              patch.object(ecm,'_read_matrix',return_value=rows),patch.object(ecm,'_read_catalog',return_value=cat):
             plan=ecm.prepare_ecm_plan(Path('.'),'test.xlsx')
             result=ecm.apply_ecm_plan(Path('.'),'test.xlsx',plan)

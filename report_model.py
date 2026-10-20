@@ -87,6 +87,7 @@ def build_context(folder,start=None,end=None,series=None,*,synthetic=False,works
     def chosen(code,key=None):return selected is None or code in selected or key in selected
     warnings=[];raw={name:[] for name in ('prices','fx_rates','market_indicators','equity_rank_snapshots')}
     db=core.path_bundle(folder)['db']
+    withdrawn_identities=set()
     if db.exists():
         with closing(sqlite3.connect(db.resolve().as_uri()+'?mode=ro',uri=True)) as cx:
             cx.row_factory=sqlite3.Row
@@ -96,6 +97,11 @@ def build_context(folder,start=None,end=None,series=None,*,synthetic=False,works
                 if table in existing:
                     raw[table]=[dict(row) for row in cx.execute('SELECT * FROM '+table+' ORDER BY rowid')]
                 else:warnings.append(table+': 저장 자료 없음')
+            if 'price_revisions' in existing:
+                for r in cx.execute('''SELECT symbol,assessment_date,unit,price_mode,view_key FROM price_revisions
+                    WHERE workspace_id=? AND json_extract(old_values,'$[1]') IS NOT NULL
+                    AND json_extract(new_values,'$[1]') IS NULL''',(active,)):
+                    withdrawn_identities.add(tuple(r))
             cx.rollback()
     else:warnings.append('SQLite 저장 자료 없음')
     def dated(row,key):
@@ -103,12 +109,15 @@ def build_context(folder,start=None,end=None,series=None,*,synthetic=False,works
         try:date.fromisoformat(value)
         except ValueError:return False
         return (not start or value>=start) and value<=end
-    prices=[];other=[];provenance=[];observations=[]
+    prices=[];other=[];provenance=[];observations=[];withdrawn=set()
     for r in raw['prices']:
         key=f"FMB|{r['symbol']}|{r['unit']}|{r['price_mode']}|MID"
         if not dated(r,'assessment_date') or not chosen(r['symbol'],key):continue
         provenance.append(tuple(r.get(k) for k in ('workspace_id','symbol','assessment_date','low','mid','high','unit','price_mode','view_key','source','collected_at')))
         if r['workspace_id']!=active:other.append(r);continue
+        identity=tuple(r[k] for k in ('symbol','assessment_date','unit','price_mode','view_key'))
+        if r['mid'] is None and identity in withdrawn_identities:
+            withdrawn.add((r['assessment_date'],key))
         observations.append((r.get('collected_at'),True))
         prices.append(core.Price(r['symbol'],r['assessment_date'],r['low'],r['mid'],r['high'],r['change_pct'],r['unit'],r['description'],r['widget'],r['price_mode'],r['source'],r['view_key'],r['period_label']))
     if other:warnings.append(f'다른 워크스페이스 {len(other)}행: 원본 보존, 현재 보고 수치에서는 제외')
@@ -132,8 +141,10 @@ def build_context(folder,start=None,end=None,series=None,*,synthetic=False,works
             dest.append(r)
             observations.append((r.get('captured_at'),False))
     prices.sort(key=lambda p:(p.date,p.symbol,p.view_key),reverse=True)
-    records=prepare_excel_series(prices,quotes,issues=warnings)
-    sheets=make_sheets(prices,core.latest_quotes(prices,today=date.fromisoformat(end)),quotes)
+    if withdrawn:
+        warnings.append(f'가격 정정으로 기존 Mid {len(withdrawn)}개 철회: 누적 Excel/ECM 기존 수치를 비움 대상으로 표시')
+    records=prepare_excel_series(prices,quotes,issues=warnings,withdrawn=withdrawn)
+    sheets=make_sheets(prices,core.latest_quotes(prices,today=date.fromisoformat(end)),quotes,withdrawn=withdrawn)
     sheets['워크스페이스원본']=[('workspace_id','symbol','assessment_date','low','mid','high','unit','price_mode','view_key','source','collected_at')]+provenance
     # Raw NAVER observations retain each actual market date; stock ranks never join daily columns.
     naver_keys=sorted({f"NAVER|{r['instrument_id']}|{r['unit']}|Actual|MID" for r in indicators})
@@ -155,7 +166,8 @@ def build_context(folder,start=None,end=None,series=None,*,synthetic=False,works
                 if isinstance(v,(int,float)):acc[row[0][:7]][i].append(v)
         for name,count in (('월별시세',False),('월별건수',True)):
             sheets[name]=[('기준월',)+sheets['일별시세'][0][1:],sheets['일별시세'][1]]+[
-                tuple([month]+[(len(acc[month][i]) if count else sum(acc[month][i])/len(acc[month][i])) if acc[month][i] else (0 if count else None) for i in range(len(sheets['일별시세'][0])-1)]) for month in sorted(acc)]
+                tuple([month]+[(len(acc[month][i]) if count else sum(acc[month][i])/len(acc[month][i])) if acc[month][i] else (0 if count else None) for i in range(len(sheets['일별시세'][0])-1)])
+                for month in sorted({row[0][:7] for row in sheets['일별시세'][2:]})]
     def latest(rows,key):
         result={}
         for r in sorted(rows,key=lambda r:(r['market_date'],r['captured_at'])):result[r[key]]=r

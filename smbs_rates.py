@@ -336,18 +336,20 @@ def report_series_source(key: str) -> str:
     return 'SMBS' if key.startswith('FX_') else 'FMB'
 
 
-def prepare_excel_series(fmb_prices, fx_quotes, *, issues=None):
+def prepare_excel_series(fmb_prices, fx_quotes, *, issues=None, quarantined=None, withdrawn=()):
     """Condense widget-specific observations into stable product/field columns.
 
-    RawData retains every view. When two views claim different same-date price values,
-    only trust a value demonstrably bounded by the very same view's low/high; otherwise
-    quarantine that daily cell instead of silently guessing or creating duplicate columns.
+    RawData retains every view. Different same-date values are quarantined,
+    never resolved by picking a bounded view. Optional quarantined entries
+    identify cells whose previously exported numeric values must be withdrawn.
     This is intentionally NOT a DB migration.
     """
     from collections import defaultdict, Counter
     issues=issues if issues is not None else []
+    quarantined=quarantined if quarantined is not None else []
     values=defaultdict(dict)
     candidates=defaultdict(list)
+    invalid_cells=set(withdrawn)
     for p in fmb_prices:
         if p.price_mode not in ('Actual','Unspecified','Forecast') or p.period_label:
             continue
@@ -358,6 +360,16 @@ def prepare_excel_series(fmb_prices, fx_quotes, *, issues=None):
             except (InvalidOperation,ValueError):continue
             if not number.is_finite():continue
             key=f'FMB|{p.symbol}|{p.unit}|{p.price_mode}|{field.upper()}'
+            if field == 'mid':
+                try:
+                    outside = ((p.low is not None and number < Decimal(str(p.low))) or
+                               (p.high is not None and number > Decimal(str(p.high))))
+                except (InvalidOperation, ValueError):
+                    outside = True
+                if outside:
+                    invalid_cells.add((p.date,key))
+                    issues.append(f'{p.date} {key}: Mid와 Low/High 범위 충돌; 반영 보류')
+                    continue
             bounded=False
             if p.low is not None and p.high is not None:
                 try:
@@ -366,10 +378,15 @@ def prepare_excel_series(fmb_prices, fx_quotes, *, issues=None):
                 except (InvalidOperation,ValueError):pass
             candidates[(p.date,key)].append((number,bounded,p.view_key))
     for (dt,key),samples in candidates.items():
+        if (dt,key) in invalid_cells:
+            continue
         uniques={num for num,_,_ in samples}
         if len(uniques)==1:
             values[dt][key]=float(next(iter(uniques)));continue
         issues.append(f'{dt} {key}: 서로 다른 뷰 가격 충돌 {sorted(str(v) for v in uniques)}; 일별시세 반영 보류')
+        quarantined.append((dt,key,'서로 다른 뷰 가격 충돌'))
+    for dt,key in sorted(invalid_cells):
+        quarantined.append((dt,key,'Mid와 Low/High 범위 불일치'))
     fx_candidates=defaultdict(list)
     for q in fx_quotes:
         fx_candidates[(q.quote_date,q.currency,q.unit)].append(q)
@@ -382,6 +399,7 @@ def prepare_excel_series(fmb_prices, fx_quotes, *, issues=None):
         if len(pairs)!=1 or not finite:
             sources=', '.join(sorted({q.source for q in samples}))
             issues.append(f'{dt} {key}: 환율 출처 충돌 또는 비정상 수치 ({sources}); 매매기준율·전일대비 반영 보류')
+            quarantined.append((dt,key,'환율 출처 충돌 또는 비정상 수치'))
             continue
         rate,difference=next(iter(pairs))
         values[dt][key]=float(rate)

@@ -1,5 +1,5 @@
 """Windows per-user scheduling. No elevation, passwords or new browser profile."""
-from datetime import datetime
+from datetime import datetime,timedelta
 from pathlib import Path
 from xml.etree import ElementTree as ET
 import os,re,subprocess,sys,tempfile
@@ -39,6 +39,8 @@ def _run(args):
 
 def register(hhmm='08:30'):
     if not IS_WINDOWS:raise RuntimeError('회사 Windows PC에서 예약 등록하세요. 이 컴퓨터에는 예약을 만들지 않았습니다.')
+    if datetime.now().astimezone().utcoffset()!=timedelta(hours=9):
+        raise RuntimeError('예약은 한국시간(KST) 기준입니다. Windows 표준 시간대를 한국시간으로 확인한 뒤 등록하세요.')
     user=_run(['whoami'])
     xml=task_xml(hhmm,user,Path(__file__).with_name('FastmarketsCollector_v3_7.py').resolve(),Path(sys.executable))
     # Scheduler imports UTF-16 XML from a bounded temporary file; no password saved.
