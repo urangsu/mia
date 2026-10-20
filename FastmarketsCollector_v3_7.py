@@ -14,7 +14,9 @@ def main(argv=None):
     p.add_argument('--data-dir');p.add_argument('--workbook')
     p.add_argument('--start');p.add_argument('--end');p.add_argument('--series')
     p.add_argument('--with-fx',action='store_true',help='v3.6 호환; v3.7 전체 실행에 SMBS가 기본 포함됩니다')
-    p.add_argument('--naver-force',action='store_true');p.add_argument('--no-naver',action='store_true')
+    p.add_argument('--naver-force',action='store_true',default=None)
+    p.add_argument('--no-naver',action='store_true',default=None)
+    p.add_argument('--legacy-gui',action='store_true',help='기존 Tkinter 화면으로 실행')
     p.add_argument('--schedule',metavar='HH:MM',help='로그인한 Windows 사용자 일일 예약 등록')
     p.add_argument('--schedule-status',action='store_true')
     p.add_argument('--unschedule',action='store_true')
@@ -35,19 +37,38 @@ def main(argv=None):
         if value is not None:settings[key]=value
     settings.update(report_start=args.start,report_end=args.end,
                     report_series=args.series.split(',') if args.series else None,
-                    reports_only=args.reports_only,naver_enabled=not args.no_naver,naver_force=args.naver_force)
+                    reports_only=args.reports_only)
+    if args.no_naver is not None:settings['naver_enabled']=not args.no_naver
+    if args.naver_force is not None:settings['naver_force']=args.naver_force
     if args.start or args.end or args.series:
         if not args.reports_only:p.error('기간·종목 필터는 --reports-only에서만 사용하세요. 누적 원본 축소를 방지합니다.')
+    if args.once or args.export_only or args.reports_only:
+        from app_settings import validate
+        try:
+            if settings.get('_settings_warning'):
+                raise ValueError(settings['_settings_warning'])
+            settings=validate(settings,'collect' if args.once else 'reports' if args.reports_only else 'export')
+        except (ValueError,TypeError) as exc:
+            print('설정 확인 필요: '+str(exc),file=sys.stderr)
+            return 2
     if args.export_only or args.reports_only:
         from pipeline_v37 import export_only
         result=export_only(settings)
     elif args.once:
         from pipeline_v37 import run_collection
-        folder=Path(settings['data_dir']);browser=core.ChromeSession(lambda m:core.log(folder,m))
+        folder=Path(settings['data_dir']);browser=core.ChromeSession(lambda m:core.log(folder,m),driver_path=settings.get('driver_path'))
         try:result=run_collection(settings,browser,threading.Event(),lambda m:core.log(folder,m))
         finally:browser.detach()
     else:
-        from gui_v37 import main_gui
+        if args.legacy_gui:
+            from gui_v37 import main_gui
+        else:
+            try:
+                from desktop_ui import main_gui
+            except ImportError as exc:
+                print('새 화면 의존성이 없습니다. py -m pip install -r requirements-desktop.txt 실행 후 다시 시작하세요.\n'
+                      '기존 화면: py FastmarketsCollector_v3_7.py --legacy-gui',file=sys.stderr)
+                return 2
         main_gui();return 0
     print(json.dumps(result,ensure_ascii=False,indent=2,default=str))
     status=result.get('diag',result).get('status')

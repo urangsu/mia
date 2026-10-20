@@ -29,8 +29,10 @@ class _Cancel:
 
 def export_only(settings,*,_lock_held=False):
     """Never use an unpreserving non-Windows writer on an existing workbook."""
+    from app_settings import reporting_identity
+    workspace_url,workspace_id=reporting_identity(settings)
     if not _lock_held:
-        with core.exclusive_browser_job(),core.workspace_scope(settings.get('workspace_url')):
+        with core.exclusive_browser_job(),core.workspace_scope(workspace_url):
             return export_only(settings,_lock_held=True)
     folder=Path(settings['data_dir']).expanduser()
     target=Path(settings.get('workbook_path') or core.path_bundle(folder)['xlsx']).expanduser()
@@ -45,7 +47,7 @@ def export_only(settings,*,_lock_held=False):
             start=settings.get('report_start',settings.get('start')) or None,
             end=settings.get('report_end',settings.get('end')) or None,
             series=settings.get('report_series',settings.get('series')),
-            workspace_id=settings.get('workspace_id'))
+            workspace_id=settings.get('workspace_id') or workspace_id)
     except Exception as exc:
         output['warnings'].append('불변 보고 스냅샷 생성 실패: '+str(exc))
         return output
@@ -109,7 +111,9 @@ def run_collection(settings,browser,cancelled,logger=print):
         return False
 
     try:
-        with core.exclusive_browser_job(),core.workspace_scope(settings.get('workspace_url')):
+        from app_settings import reporting_identity
+        workspace_url,_=reporting_identity(settings)
+        with core.exclusive_browser_job(),core.workspace_scope(workspace_url):
             storage_runtime.migrate_database(db)
             run_id=storage_runtime.start_run(db,settings)
             diag['run_id']=run_id
@@ -129,8 +133,11 @@ def run_collection(settings,browser,cancelled,logger=print):
                 result['prices']=len(rows);result['effective_lookback_days']=days
                 if not rows:result.setdefault('warnings',[]).append('FMB 신규 검증 수치 없음: 기존 SQLite 자료만 보존')
                 return result
-            fmb_result,fmb_status=stage('fmb',fmb)
-            diag['fmb_failed']=fmb_status!='complete'
+            if settings.get('fmb_enabled',True):
+                fmb_result,fmb_status=stage('fmb',fmb)
+            else:
+                fmb_result,fmb_status=stage('fmb',lambda:{'status':'disabled'})
+            diag['fmb_failed']=fmb_status not in ('complete','disabled')
             diag['fmb']=fmb_result
             if checkpoint():return output
 
@@ -143,7 +150,7 @@ def run_collection(settings,browser,cancelled,logger=print):
                 if not result.get('collected'):
                     result.setdefault('warnings',[]).append('SMBS 신규 검증 환율 없음: 기존 SQLite 자료만 보존')
                 return result
-            diag['fx'],_=stage('fx',fx)
+            diag['fx'],_=stage('fx',fx if settings.get('fx_enabled',True) else lambda:{'status':'disabled'})
             if checkpoint():return output
 
             if settings.get('naver_enabled',True):
