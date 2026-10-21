@@ -24,6 +24,7 @@ Both scripts use a repository-local `.venv`; no API keys or user profiles are ne
 - NAVER compares two confirmed pre-capture market-day closes, not intraday quotes. Keep both dates/units/sources. Missing history stays missing; do not reverse-calculate old closes from quoted changes.
 - The 08:30 Windows schedule requires a logged-in interactive user; cloud environment setup is not Windows scheduling.
 - Do not add paid/private price APIs, news, AI commentary, mail delivery or unattended ECM approval.
+- Approved public-close path: FinanceDataReader HTTP in an owned cancellable child, with exchange_calendars expected-session checks. This does not authorize private Fastmarkets APIs, KRX login bypass or browser/session changes. Preserve raw revisions/quarantine; never substitute older or adjusted closes for missing expected dates. See docs/FDR_CALENDARS_GUIDE.md.
 - Read DESIGN_REFERENCE.md before UI/report changes. No proprietary brand assets/fonts.
 
 ## Working method
