@@ -7,7 +7,7 @@ from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QTableView, QLabel, QHeaderView, QPushButton
 
 STATUS_TEXT = {'complete':'완료', 'partial':'부분 완료', 'failed':'실패', 'cancelled':'취소', 'needs_action':'확인 필요', 'running':'실행 중', 'pending':'대기', 'skipped':'생략'}
-STAGE_TEXT = {'fmb':'금속', 'fx':'환율', 'naver':'확정 종가', 'excel':'Excel', 'reports':'보고서', 'collect':'수집', 'export':'출력', 'ecm':'ECM'}
+STAGE_TEXT = {'fmb':'금속', 'fx':'환율', 'naver':'NAVER DOM','fdr':'FDR 공개 종가', 'excel':'Excel', 'reports':'보고서', 'collect':'수집', 'export':'출력', 'ecm':'ECM'}
 
 
 def concise_feedback(action, state, message):
