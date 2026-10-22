@@ -1,0 +1,46 @@
+MIA SUpt 스타일 소스 복원 — 2026-10-23
+=======================================
+
+[실제 복원 패키지]
+이 문서는 설명서가 아니라 별도로 제작한 다음 3개 파일의 사용법을 기록합니다.
+- RESTORE_MIA.py              실제 복원 프로그램
+- MIA_DOM_V4_PART_01.txt      DOM Inspector V4 전체 소스 14개(테스트 포함)의 압축 텍스트
+- README_SUpt_형식_복원.txt    Windows/오프라인 안내
+원본 패키지는 ChatGPT 대화에서 'MIA_SUpt_방식_소스복원_패키지.zip'으로 제공했습니다.
+
+[중요: GitHub 코드 보유 상태]
+현재 urangsu/mia/main에는 MIA Collector v3.7 전체 소스가 있습니다.
+DOM Inspector V4의 원본 코드는 main에 아직 등록되어 있지 않습니다.
+따라서 이 TXT 파일만 받은 상태에서는 DOM 파일을 복원할 수 없습니다.
+반드시 MIA_DOM_V4_PART_01.txt를 실제로 함께 제공해야 합니다.
+아무 파일이 없어도 되는 것처럼 성공 메시지를 출력하는 구현은 금지합니다.
+
+[온라인 복원: Collector는 최신 main / DOM은 TXT]
+ZIP을 압축 해제한 다음 Windows PowerShell에서 아래를 실행합니다.
+py -3 RESTORE_MIA.py --target ".\MIA_RESTORED" --offline-text ".\MIA_DOM_V4_PART_01.txt"
+
+[오프라인 복원: Collector는 승인된 소스 ZIP / DOM은 TXT]
+GitHub/ codeload.github.com이 차단된 경우에는 다른 네트워크에서 정상 다운로드한
+'Collector main 소스 ZIP'을 회사 보안정책상 허용된 경로로 전달한 뒤 실행:
+py -3 RESTORE_MIA.py --target ".\MIA_RESTORED" --offline-text ".\MIA_DOM_V4_PART_01.txt" --collector-zip ".\mia-main.zip"
+Collector ZIP 실제 파일명이 다르면 해당 경로로 변경합니다.
+다운로드가 차단된 경로를 우회하거나 로그인/보안정책을 우회하지 않습니다.
+
+[복원 결과]
+MIA_RESTORED\mia_collector           수집·DB·Excel·보고서 GUI 본 프로그램
+MIA_RESTORED\MIA_DOM_Inspector_v4   Chrome/Edge용 독립 요소 검사기
+
+[검증과 보호]
+DOM TXT가 Base85+BZip2 소스이며 SHA-256 2단계 검증, 개별 원본 바이트 대조를 수행합니다.
+로컬 시험에서 DOM 14개 파일의 해시가 원본 V4 ZIP과 일치했습니다.
+Collector는 GitHub main의 소스를 가져오며, 변경한 사용자 Git 작업 트리에서는
+자동 덮어쓰기 하지 않습니다. --collector-zip은 로컬 ZIP을 사용합니다.
+중복 폴더는 자동 덮어쓰지 않고, 명시적인 --replace는 DOM에만 적용됩니다.
+기존 DB/Excel/ECM, Chrome 9444/9222/9337, 스케줄러, 로그인 정보는 변경하지 않습니다.
+코드 복원과 회사 Windows 실제 프로그램 가동 검증은 별개입니다.
+
+[Github에서 일원화하려면]
+Codex가 별도로 DOM V4 소스(이 대화의 실제 원본 ZIP 또는 TXT)를 공급받아
+tools/mia_dom_inspector_v4 또는 restore/MIA_DOM_V4_PART_01.txt에
+감사 가능하게 반영하고, SHA-256 및 Chrome 합성 DOM 테스트 후 PR 병합해야 합니다.
+현재 이 작업은 완료로 표시하지 않습니다.
