@@ -1,0 +1,50 @@
+MIA / Fastmarkets Collector 최신 버전 가져오기
+작성: 2026-10-23 KST
+저장소: https://github.com/urangsu/mia
+기준 브랜치: main (실제 최신 커밋은 실행 시마다 새로 확인)
+
+[1] 첫 설치 (Windows PowerShell, Git 설치 필요)
+원하는 저장 폴더에서:
+git clone https://github.com/urangsu/mia.git
+cd mia
+
+[2] 이미 내려받은 경우
+프로그램이 실행 중이면 먼저 종료하세요.
+git status --short
+git fetch origin
+git log -1 --oneline origin/main
+git pull --ff-only origin main
+git rev-parse --short HEAD
+
+중요: git status에서 수정된 파일이 표시되면 병합/백업 여부를 먼저 검토하세요.
+git reset --hard, git clean -fd, 강제 pull, 원본 DB/Excel 삭제를 하지 마세요.
+
+[3] 최신 실행 진입점
+FastmarketsCollector_v3_7.py   (현재 기본 Qt 화면)
+FastmarketsCollector_v3_4.py   (핵심 Selenium 수집 엔진: 구버전 파일명이지만 현재 사용 중)
+desktop_ui.py / desktop_controller.py / pipeline_v37.py
+requirements-desktop.txt
+README.md / FUNCTION_FIRST_README.md / AGENTS.md
+
+Qt UI 실행 환경 설치:
+py -m pip install -r requirements-desktop.txt
+py FastmarketsCollector_v3_7.py
+기존 Tk 화면: py FastmarketsCollector_v3_7.py --legacy-gui
+
+[4] 실행 전 확인
+Chrome 디버그 포트 9444: Fastmarkets 전용. 기존 세션 소유권 검증.
+9222와 관리자 Edge 9337, 다른 프로그램의 세션은 간섭 금지.
+ECM은 이미 로그인된 일반 Edge를 이용. 회사 정책/DRM/SSO 우회 금지.
+운영 SQLite/Excel을 Git 폴더로 이동/덮어쓰기 금지.
+회사 Windows + 실제 FMB/NAVER/Excel/ECM/08:30 예약은 별도 실환경 검증 필요.
+`main`의 회귀 통과 기록은 과거 환경의 테스트이지 새 PC에서의 인수 결과가 아닙니다.
+
+[5] Codex에 요청할 때
+'먼저 git fetch origin으로 원격 main의 최신 HEAD를 확인하고, AGENTS.md·README.md·
+FUNCTION_FIRST_README.md·docs/CODEX_WORK_ORDER.md를 읽은 뒤 기존 변경사항을
+보존하며 기능과 테스트를 검토하라. 운영 DB/Excel, 회사 인증 세션을 건드리지 말고
+오프라인 검사와 회사 Windows 실제 검증을 구분하여 보고하라.'
+
+[6] DOM 확장 프로그램은 별도
+DOM Inspector는 Collector 수집 코드가 아닙니다. DOM 전용 TXT는
+GET_LATEST_DOM_V4.txt 파일을 보세요.
