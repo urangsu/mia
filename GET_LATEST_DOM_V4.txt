@@ -1,0 +1,47 @@
+MIA DOM Inspector V4 — 최신 버전 가져오기 / 저장소 반영 지시
+작성: 2026-10-23 KST
+저장소: https://github.com/urangsu/mia
+현재 확인된 DOM 최신 제공본: MIA_DOM_Inspector_V4_미니패널.zip (확장 manifest 버전 4.0.0)
+원본 ZIP 보관 장소: 이 대화에서 제공한 다운로드 파일
+**중요: 이 TXT를 작성하는 시점의 GitHub main에는 DOM V4 소스 및 ZIP이 없습니다.**
+본 프로그램 코드와 DOM 확장 코드가 같은 것이라고 가정하지 마세요.
+이 TXT만 git pull 하면 DOM V4가 설치된다는 뜻이 아닙니다.
+
+[1] GitHub 본 프로그램 최신 가져오기
+git clone https://github.com/urangsu/mia.git
+cd mia
+git fetch origin
+git pull --ff-only origin main
+
+[2] DOM 최신 버전의 원본 확인
+이 대화에 첨부된 'MIA_DOM_Inspector_V4_미니패널.zip'을 사용합니다.
+압축 안의 필수 파일:
+manifest.json / multi_picker.js / scan_core.js / popup.html / popup.js
+viewer.html / viewer.js / ui.css / README.md
+본래 v4 ZIP에는 합성 Chromium 테스트 코드도 있습니다.
+V4: 우측 상단 접힌 미니 패널(펼치기), 다중 요소 연속 선택,
+선택 항목만 JSON 저장, AG Grid/가상 스크롤 구조 분석.
+전체 DOM 수집은 고급 기능이며 기본 기능으로 강제하지 마세요.
+
+[3] Codex에게 소스를 GitHub에 게시하도록 지시
+A. 원본 ZIP을 받아 내용/manifest 버전 4.0.0/필수 파일과 테스트를 확인.
+B. 별도 폴더 tools/mia_dom_inspector/ 아래에 확장 소스와 README/테스트를 배치.
+C. Collector 코어·업무 DB·Excel·ECM·Chrome 9444/9222/9337 설정 변경 없이
+   독립 MV3 확장으로 유지. 사내 보안정책 준수.
+D. Git 브랜치에서 코드 검사·합성 페이지 테스트 후 PR을 만들고 main에 반영.
+   프로젝트 main에 병합하기 전까지 DOM 다운로드가 가능하다고 안내하지 말 것.
+E. GitHub main에 소스가 반영된 후에는 다음과 같이 최신 파일을 가져옵니다:
+   git fetch origin
+   git pull --ff-only origin main
+   Explorer에서 mia\tools\mia_dom_inspector 폴더 확인
+   Chrome의 chrome://extensions → 개발자 모드 → 압축해제된 확장 프로그램 로드
+   (Edge: edge://extensions)
+F. 회사 로그인 페이지의 DOM/가격/직원 식별정보/인증값을 공개 Git에 커밋 금지.
+   확장 테스트 통과는 실제 회사 사이트 동작 검증과 구분.
+
+[4] 검증 표시
+2026-10-23 확인한 main HEAD = 39392aa2947899932c09dc4e1dc42a1bf43956fe.
+그러나 이 값은 '마지막 커밋'이 아닌 '작성시 확인 값'. 항상 origin/main 조회.
+V4 ZIP SHA256 (원본 압축이 아닌 별도로 생성한 런타임 ZIP에만 해당):
+a03c8ccfe505bfb5d20ea8ff8809512a9aaf770be48de616a00acba7dff448a5
+원본 V4 ZIP과 런타임 ZIP을 동일 파일로 혼동하지 마세요.
