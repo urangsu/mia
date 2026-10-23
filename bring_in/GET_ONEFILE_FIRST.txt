@@ -1,0 +1,27 @@
+MIA 오프라인 복원: PART 11개 대신 ONEFILE 1개
+
+현재 권장 파일 (2026-10-23):
+  1. 본 프로그램: MIA_COLLECTOR_ONEFILE.txt (GitHub 이 폴더에 포함)
+  2. DOM Inspector V4: MIA_DOM_ARCHIVE_V4.txt (대화에서 제공한 복원 키트에 포함)
+  3. 복원 실행기: RESTORE_MIA_ONEFILE.py / RESTORE_MIA_ONEFILE.cmd (복원 키트에 포함)
+
+본 프로그램은 더 이상 MIA_COLLECTOR_PART_01~11.txt을 다운로드할 필요가 없습니다.
+PART 파일들은 예전 방식의 보존용입니다. 새 ONEFILE과 PART를 섞어 복원하지 마세요.
+
+절차:
+- GitHub에서 MIA_COLLECTOR_ONEFILE.txt 하나만 내려받습니다.
+- 대화에서 제공한 MIA_ONEFILE_2개TXT_복원키트.zip을 압축 해제합니다.
+- TXT 파일을 복원기와 같은 폴더에 두고 CMD를 실행합니다.
+- 검증 전용: py -3 RESTORE_MIA_ONEFILE.py --verify-only
+- 실제 복원: py -3 RESTORE_MIA_ONEFILE.py
+- 결과: 실행 폴더의 MIA_Restored 폴더에 새 이름으로 생성.
+- 운영 SQLite/Excel, ECM, 로그인 브라우저, 원래 설치 폴더는 변경하지 않습니다.
+
+정합성:
+- Collector ONEFILE은 원본 커밋 8b0fc14781f33b44e0c1e5a0b446dfe53000c0a3의
+  소스 파일 106개를 압축한 스냅샷입니다 (TXT 약 448KB).
+- GitHub에 업로드한 압축본을 다시 해제하여 원본 106개 Git blob 해시/크기/경로와 비교 완료.
+- DOM V4 TXT는 소스 14개를 XZ 압축한 스냅샷 (TXT 약 31KB)입니다.
+- 각각 필요한 TXT는 정확히 하나입니다. 이 버전들은 자동 동기화가 아니라
+  고정 시점 백업입니다. 향후 코드가 바뀌면 ONEFILE을 다시 생성해야 합니다.
+- 복원 성공은 소스 무결성을 뜻하며 회사 Windows/FMB/ECM 운영 검증을 대신하지 않습니다.
