@@ -8,7 +8,7 @@
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 "Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;font-variant-numeric:tabular-nums}
 a{color:inherit}main{max-width:1400px;margin:auto;padding:28px 30px 50px}.head{padding:24px 0 12px}.eyebrow{font-size:12px;letter-spacing:1.8px;color:var(--accent);font-weight:750}.head h1{font-size:31px;letter-spacing:-.9px;margin:6px 0 4px}.lead{color:var(--muted);margin:0}.head-meta{font-size:12px;color:var(--muted)}
 .pill-nav{display:flex;gap:8px;overflow-x:auto;padding:14px 0 16px;position:sticky;top:0;background:var(--bg);z-index:5}.pill-nav a{flex:none;text-decoration:none;border:1px solid var(--line);border-radius:50px;background:white;color:#45536a;padding:6px 13px;font-size:12px}.pill-nav a:hover{color:var(--accent);border-color:var(--accent)}
-.section-intro{display:flex;justify-content:space-between;gap:14px;align-items:baseline;padding:12px 0 4px}.section-intro h2{font-size:20px;margin:0}.section-intro p{margin:0;color:var(--muted);font-size:12px}
+.group-subpanel{border-top:1px solid var(--line);padding-top:20px;margin-top:20px}.group-subpanel .group-heading h3{font-size:16px}.section-intro{display:flex;justify-content:space-between;gap:14px;align-items:baseline;padding:12px 0 4px}.section-intro h2{font-size:20px;margin:0}.section-intro p{margin:0;color:var(--muted);font-size:12px}
 .market-group,.panel{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:24px;margin:13px 0;box-shadow:0 2px 12px rgba(30,45,65,.035)}
 .market-group{scroll-margin-top:92px}.group-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}.group-heading h3{font-size:19px;margin:0;font-weight:750;letter-spacing:-.4px}.group-state{font-size:11px;background:#edf2f7;color:#56687e;border-radius:30px;padding:3px 9px;white-space:nowrap}
 .source-line{font-size:12px;color:var(--muted);margin:6px 0 16px}.source-line strong{color:#4f647b;font-weight:600}.note{color:#8994a3;font-size:12px;margin:8px 0}.notice{background:#f5f7fa;border-radius:10px;padding:16px;color:#778498}
@@ -51,9 +51,7 @@ details{border:1px solid var(--line);background:#fff;border-radius:14px;margin:1
  <p class="legend">마우스를 차트에 올리면 기준일·가격·단위를 표시합니다. 기간 필터는 DB 데이터를 변경하지 않습니다.</p>
 </div>
 {% if not group.series %}<p class="notice">이 품목의 검증된 저장 시세가 없습니다. 원천 연동 전 자료를 임의 가격으로 채우지 않습니다.</p>{% endif %}
-</section>
-{% endfor %}
-<section class="panel" aria-label="국내 시가총액 순위">
+{% if group.id == 'kr_market' %}<div class="group-subpanel" aria-label="국내 시가총액 순위">
 <div class="group-heading"><h3>국내 시가총액 · 검증된 스냅샷</h3><span class="group-state">국내 주식</span></div>
 <p class="note">시가총액은 날짜별 시장 순위 스냅샷입니다. 개별 종목의 종가 차트로 오인하지 않습니다.</p>
 {% if dashboard.rankings_kr %}
@@ -61,12 +59,14 @@ details{border:1px solid var(--line);background:#fff;border-radius:14px;margin:1
 {% for stock in dashboard.rankings_kr %}<tr><td>{{ stock.rank if stock.rank is not none else '별도' }}</td><td>{{ stock.name }}</td><td class="code">{{ stock.code }}</td><td>{{ stock.date }}</td><td class="align-right">{{ stock.value }}</td><td>{{ stock.unit }}</td></tr>{% endfor %}
 </tbody></table>
 {% else %}<p class="notice">검증된 한국 주식 시가총액 자료가 없습니다. 장중 값은 확정 종가로 간주하지 않습니다.</p>{% endif %}
-</section>
-<section class="panel" aria-label="미국 종목과 ETF">
+</div>{% endif %}
+{% if group.id == 'us_market' %}<div class="group-subpanel" aria-label="미국 종목과 ETF">
 <div class="group-heading"><h3>미국 주식 · ETF · 시장별 순위</h3><span class="group-state">연동 준비</span></div>
 <p class="note">미국 주식·ETF / NYSE·NASDAQ·AMEX 묶음은 <a href="https://stock.naver.com/market/stock/usa">네이버 증권 미국 증시</a>의 분류를 참고한 구조입니다. 현재 저장된 종목별 검증 이력은 없습니다.</p>
 <p class="notice">미국 개별 종목의 시가총액·일별 종가 수집은 아직 구현되지 않았습니다. 시세 또는 차트 데이터를 임의로 생성하지 않습니다.</p>
+</div>{% endif %}
 </section>
+{% endfor %}
 <details class="raw-data"><summary>상세 원본 표 보기 · 금속·환율·지수·시총</summary><div>
 {% for table in tables %}<section class="raw-section"><h4>{{ table.name }}</h4>
 <table class="raw-table"><thead><tr>{% for header in table.headers %}<th>{{ header }}</th>{% endfor %}</tr></thead><tbody>
