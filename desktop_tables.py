@@ -230,6 +230,8 @@ class SnapshotSummary(QWidget):
                 detail += f' · 이력 부족 {sum("missing_history" in r for r in rows)}개'
             self.cards[index].setText(f'{title}  {len(confirmed)}개\n{detail}')
         rows = list(tables.get('보고용_금속시세', []))[1:]
-        selected = [r for r in rows if str(r[0]) in symbols]
+        # Legacy 6-column test data and the new 7-column named product table
+        # are both accepted; symbol identity remains in the final code column.
+        selected = [r for r in rows if (str(r[6] if len(r) >= 7 else r[0]) in symbols)]
         text = '   /   '.join(f'{r[0]}  {r[2] if r[2] is not None else "미확인"} {r[3]} · {r[1] or "기준일 없음"}' for r in selected[:4] if len(r) >= 4)
         self.representatives.setText('대표 금속 · ' + (text or '선택 종목의 저장 자료 없음' if symbols else '설정에서 표시할 종목 코드를 지정하세요.'))
