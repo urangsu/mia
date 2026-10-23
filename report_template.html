@@ -1,11 +1,87 @@
 <!doctype html>
-<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{{ context.label }}</title>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ context.label }}</title>
 <style>
-:root{color-scheme:dark;--base:#101013;--panel:#17171c;--line:rgba(239,215,215,.13);--text:#f3eeee;--muted:#aaaab2;--up:#f5445a;--down:#4391ff}
-*{box-sizing:border-box}body{margin:0;background:var(--base);color:var(--text);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif}main{max-width:1440px;margin:auto;padding:40px 24px}header{margin-bottom:32px}h1{font-size:30px;letter-spacing:-.6px;margin:0 0 12px}h2{font-size:24px;margin:0 0 18px}p{margin:4px 0;color:var(--muted)}section{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:24px;margin:24px 0;overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}th,td{padding:12px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{font-size:12px;color:var(--muted);font-weight:500;white-space:nowrap}.numeric{text-align:right;white-space:nowrap}.positive{color:var(--up)}.negative{color:var(--down)}.source{max-width:240px;overflow-wrap:anywhere;font-size:12px}.meta{font-size:12px;overflow-wrap:anywhere}.warning{color:#e8c18a}.empty{padding:20px;color:var(--muted)}footer{padding:20px 0;font-size:12px;color:var(--muted)}
-@media(max-width:640px){main{padding:24px 12px}section{padding:16px}h1{font-size:26px}td,th{padding:10px 8px}}
-@media print{:root{color-scheme:light;--base:white;--panel:white;--line:#ddd;--text:#171717;--muted:#555;--up:#b42338;--down:#175fb4}body{font-size:11px}main{padding:0}section{break-inside:auto;border:0;padding:0;margin:24px 0;overflow:visible}h2{font-size:18px}table{font-size:9px;table-layout:fixed}td,th{padding:6px;overflow-wrap:anywhere;white-space:normal!important}thead{display:table-header-group}tr{break-inside:avoid}.source{font-size:8px}@page{size:A4 landscape;margin:12mm}}
-</style></head><body><main><header><h1>{{ context.label }}</h1><p>수치·단위·출처 기준의 동결 보고서</p><p class="meta">자료 기준 시각 {{ context.as_of or '미확인' }} · 조회 종료일 {{ context.end }}</p><p class="meta">Snapshot SHA-256 {{ context.snapshot_id }}</p>{% for source,dates in context.source_dates.items() %}<p class="meta">{{ source }} 시장·고시일: {{ dates|join(', ') or '미고시' }}</p>{% endfor %}</header>
-{% if context.warnings %}<section aria-label="자료 주의사항"><h2>자료 상태</h2>{% for warning in context.warnings %}<p class="warning">{{ warning }}</p>{% endfor %}</section>{% endif %}
-{% for table in tables %}<section><h2>{{ table.name }}</h2><table><thead><tr>{% for header in table.headers %}<th scope="col">{{ header }}</th>{% endfor %}</tr></thead><tbody>{% for row in table.rows %}<tr>{% for cell in row %}<td class="{{ cell.css }}">{{ cell.text }}</td>{% endfor %}</tr>{% endfor %}</tbody></table>{% if not table.rows %}<p class="empty">미고시 · 검증된 관측 자료 없음</p>{% endif %}</section>{% endfor %}
-<footer>시장·고시일은 각 원천 자료의 날짜이며 생성일로 대체하지 않습니다. 미고시 값은 0으로 채우지 않습니다. Excel · HTML · PPTX는 동일 Snapshot을 사용합니다.</footer></main></body></html>
+:root{color-scheme:light;--bg:#f5f7fa;--card:#fff;--ink:#192536;--muted:#68758a;--line:#e5e9ef;--navy:#183b56;--accent:#2668b4;--up:#d84250;--down:#246ac0}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 "Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;font-variant-numeric:tabular-nums}
+a{color:inherit}main{max-width:1400px;margin:auto;padding:28px 30px 50px}.head{padding:24px 0 12px}.eyebrow{font-size:12px;letter-spacing:1.8px;color:var(--accent);font-weight:750}.head h1{font-size:31px;letter-spacing:-.9px;margin:6px 0 4px}.lead{color:var(--muted);margin:0}.head-meta{font-size:12px;color:var(--muted)}
+.pill-nav{display:flex;gap:8px;overflow-x:auto;padding:14px 0 16px;position:sticky;top:0;background:var(--bg);z-index:5}.pill-nav a{flex:none;text-decoration:none;border:1px solid var(--line);border-radius:50px;background:white;color:#45536a;padding:6px 13px;font-size:12px}.pill-nav a:hover{color:var(--accent);border-color:var(--accent)}
+.section-intro{display:flex;justify-content:space-between;gap:14px;align-items:baseline;padding:12px 0 4px}.section-intro h2{font-size:20px;margin:0}.section-intro p{margin:0;color:var(--muted);font-size:12px}
+.market-group,.panel{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:24px;margin:13px 0;box-shadow:0 2px 12px rgba(30,45,65,.035)}
+.market-group{scroll-margin-top:92px}.group-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}.group-heading h3{font-size:19px;margin:0;font-weight:750;letter-spacing:-.4px}.group-state{font-size:11px;background:#edf2f7;color:#56687e;border-radius:30px;padding:3px 9px;white-space:nowrap}
+.source-line{font-size:12px;color:var(--muted);margin:6px 0 16px}.source-line strong{color:#4f647b;font-weight:600}.note{color:#8994a3;font-size:12px;margin:8px 0}.notice{background:#f5f7fa;border-radius:10px;padding:16px;color:#778498}
+.trend-series{display:flex;flex-wrap:wrap;gap:7px;margin:15px 0}.series-pill,.range-button{font:inherit;cursor:pointer;border:1px solid #dfe5ec;background:white;border-radius:9px;padding:6px 10px;color:#556578;font-size:12px}.series-pill[aria-pressed="true"],.range-button[aria-pressed="true"]{background:#e8f2fe;border-color:#8dbaf2;color:#17569c;font-weight:700}.muted-inline{font-size:12px;color:var(--muted)}
+.trend-toolbar{display:flex;align-items:center;flex-wrap:wrap;justify-content:space-between;gap:10px;margin:8px 0}.trend-value{font-size:13px;color:var(--ink);font-weight:650}.range-buttons{display:flex;flex-wrap:wrap;gap:5px}.month-choice{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12px}.month-choice input{min-width:110px;width:120px;border:1px solid #dfe5ec;padding:6px 8px;border-radius:8px;color:var(--ink);font:inherit}
+.trend-chart{position:relative}.trend-plot{display:block;max-width:100%;width:100%;height:auto;min-height:190px;touch-action:pan-y}.trend-grid{stroke:#e7ecf2;stroke-width:1}.trend-line{stroke:var(--accent);stroke-width:2.8;stroke-linecap:round;stroke-linejoin:round}.trend-tick{fill:#9aa6b6;font-size:11px}.trend-empty{fill:#94a0af;font-size:15px}.trend-dot{fill:#2668b4}.trend-focus{fill:white;stroke:#2668b4;stroke-width:2}.trend-cross{stroke:#9cabb9;stroke-width:1;stroke-dasharray:4 4}.trend-tooltip{position:absolute;top:10px;max-width:55%;padding:7px 10px;background:#213449;color:white;border-radius:8px;font-size:11px;pointer-events:none;box-shadow:0 5px 16px #0002}
+.legend{font-size:12px;color:var(--muted)}.risk{color:#a45f3e}.rank-table{width:100%;border-collapse:collapse;font-size:13px}.rank-table th,.rank-table td{padding:11px 10px;text-align:left;border-bottom:1px solid var(--line)}.rank-table th{font-weight:500;color:var(--muted)}.align-right{text-align:right!important}.code{font-size:11px;color:#98a2b1}
+details{border:1px solid var(--line);background:#fff;border-radius:14px;margin:12px 0;overflow:hidden}summary{cursor:pointer;padding:17px 21px;font-weight:700;list-style-position:inside}details>div{padding:4px 20px 22px}.raw-section{margin:18px 0 25px;overflow-x:auto}.raw-section h4{margin:0 0 8px;font-size:15px}.raw-table{width:100%;border-collapse:collapse;font-size:12px}.raw-table th,.raw-table td{padding:7px;border-bottom:1px solid var(--line);text-align:left}.raw-table th{color:var(--muted);white-space:nowrap}.numeric{text-align:right!important;white-space:nowrap}.source{max-width:240px;overflow-wrap:anywhere}.positive{color:var(--up)}.negative{color:var(--down)}.criteria p{font-size:12px;color:var(--muted);overflow-wrap:anywhere}.warning{color:#976237!important}.footer{font-size:12px;color:var(--muted);padding:18px 0}
+@media(max-width:700px){main{padding:16px 12px 34px}.head h1{font-size:25px}.market-group,.panel{padding:16px;border-radius:12px}.group-heading h3{font-size:16px}.head-meta{font-size:11px}.trend-tooltip{max-width:85%}.trend-plot{min-height:160px}.month-choice input{width:110px}.pill-nav{padding-top:9px}}
+@media print{main{max-width:none;padding:0;background:white}.pill-nav,.trend-toolbar,.trend-tooltip{display:none!important}.market-group{break-inside:avoid;box-shadow:none}details{border:0}details:not([open])>div{display:block}summary{display:none}.footer{font-size:10px}@page{size:A4 landscape;margin:12mm}}
+</style></head>
+<body>
+<main>
+<header class="head">
+<div class="eyebrow">MIA · MARKET INTELLIGENCE</div>
+<h1>금속·환율·시장 시세 대시보드</h1>
+<p class="lead">품목과 시장별로 묶어 보는 검증된 누적 관측 · 지표별 단독 가격 축</p>
+<p class="head-meta">자료 시각 {{ context.as_of or '미확인' }} · 현재 보고서는 저장된 DB 스냅샷이며 실시간 호가가 아닙니다.</p>
+</header>
+<nav class="pill-nav" aria-label="품목 묶음 바로가기">
+{% for group in dashboard.groups %}<a href="#group-{{ group.id }}">{{ group.title }}</a>{% endfor %}
+</nav>
+<div class="section-intro"><h2>금속·원료·시장 그룹</h2><p>품목명 우선 · 코드와 단위·출처는 별도 확인</p></div>
+<template id="market-data">{{ dashboard_json }}</template>
+{% for group in dashboard.groups %}
+<section class="market-group" id="group-{{ group.id }}" data-group="{{ group.id }}">
+<div class="group-heading"><h3>{{ group.title }}</h3><span class="group-state">{{ group.status }}</span></div>
+<p class="source-line"><strong>관리 기준</strong> · {{ group.sources | join(' / ') if group.sources else '신규 품목 추가 가능' }}</p>
+<div class="trend-series" aria-label="{{ group.title }} 시리즈 선택"></div>
+<div class="trend-chart" hidden>
+ <div class="trend-toolbar">
+  <span class="trend-value"></span>
+  <div class="range-buttons" aria-label="기간 선택">
+   <button class="range-button" type="button" data-range="1">1개월</button><button class="range-button" type="button" data-range="3">3개월</button><button class="range-button" type="button" data-range="6">6개월</button><button class="range-button" type="button" data-range="12">1년</button><button class="range-button" type="button" data-range="all">전체</button>
+  </div>
+  <div class="month-choice"><label>시작 <input class="trend-from" type="month" aria-label="시작 월"></label><label>종료 <input class="trend-to" type="month" aria-label="종료 월"></label></div>
+ </div>
+ <svg class="trend-plot" viewBox="0 0 900 268" role="img" aria-label="{{ group.title }} 시세 추이; 그래프 위에 마우스를 올리면 날짜와 값이 표시됩니다" tabindex="0"></svg>
+ <div class="trend-tooltip" hidden></div>
+ <p class="legend">마우스를 차트에 올리면 기준일·가격·단위를 표시합니다. 기간 필터는 DB 데이터를 변경하지 않습니다.</p>
+</div>
+{% if not group.series %}<p class="notice">이 품목의 검증된 저장 시세가 없습니다. 원천 연동 전 자료를 임의 가격으로 채우지 않습니다.</p>{% endif %}
+</section>
+{% endfor %}
+<section class="panel" aria-label="국내 시가총액 순위">
+<div class="group-heading"><h3>국내 시가총액 · 검증된 스냅샷</h3><span class="group-state">국내 주식</span></div>
+<p class="note">시가총액은 날짜별 시장 순위 스냅샷입니다. 개별 종목의 종가 차트로 오인하지 않습니다.</p>
+{% if dashboard.rankings_kr %}
+<table class="rank-table"><thead><tr><th>순위</th><th>종목명</th><th>코드</th><th>시장일</th><th class="align-right">시가총액</th><th>단위</th></tr></thead><tbody>
+{% for stock in dashboard.rankings_kr %}<tr><td>{{ stock.rank if stock.rank is not none else '별도' }}</td><td>{{ stock.name }}</td><td class="code">{{ stock.code }}</td><td>{{ stock.date }}</td><td class="align-right">{{ stock.value }}</td><td>{{ stock.unit }}</td></tr>{% endfor %}
+</tbody></table>
+{% else %}<p class="notice">검증된 한국 주식 시가총액 자료가 없습니다. 장중 값은 확정 종가로 간주하지 않습니다.</p>{% endif %}
+</section>
+<section class="panel" aria-label="미국 종목과 ETF">
+<div class="group-heading"><h3>미국 주식 · ETF · 시장별 순위</h3><span class="group-state">연동 준비</span></div>
+<p class="note">미국 주식·ETF / NYSE·NASDAQ·AMEX 묶음은 <a href="https://stock.naver.com/market/stock/usa">네이버 증권 미국 증시</a>의 분류를 참고한 구조입니다. 현재 저장된 종목별 검증 이력은 없습니다.</p>
+<p class="notice">미국 개별 종목의 시가총액·일별 종가 수집은 아직 구현되지 않았습니다. 시세 또는 차트 데이터를 임의로 생성하지 않습니다.</p>
+</section>
+<details class="raw-data"><summary>상세 원본 표 보기 · 금속·환율·지수·시총</summary><div>
+{% for table in tables %}<section class="raw-section"><h4>{{ table.name }}</h4>
+<table class="raw-table"><thead><tr>{% for header in table.headers %}<th>{{ header }}</th>{% endfor %}</tr></thead><tbody>
+{% for row in table.rows %}<tr>{% for cell in row %}<td class="{{ cell.css }}">{{ cell.text }}</td>{% endfor %}</tr>{% endfor %}
+</tbody></table>{% if not table.rows %}<p class="notice">검증된 자료 없음</p>{% endif %}
+</section>{% endfor %}
+</div></details>
+<details class="criteria"><summary>자료 기준 · 출처 · 검증 상태 펼치기</summary><div>
+<p>보고 종료일 {{ context.end }} · 시작일 {{ context.start or '전체' }}</p>
+<p>Snapshot SHA-256: {{ context.snapshot_id }}</p>
+{% for source, dates in context.source_dates.items() %}<p>{{ source }} 시장·고시일: {{ dates | join(', ') or '미고시' }}</p>{% endfor %}
+{% for message in dashboard.source_gaps %}<p class="warning">{{ message }}</p>{% endfor %}
+{% for warning in context.warnings %}<p class="warning">{{ warning }}</p>{% endfor %}
+</div></details>
+<footer class="footer">데이터 출처별 날짜와 단위를 보존하며, 없는 값은 0으로 채우지 않습니다. 이 화면은 저장된 데이터의 오프라인 시각화입니다.</footer>
+</main>
+<script src="market_report.js" defer></script>
+</body></html>
