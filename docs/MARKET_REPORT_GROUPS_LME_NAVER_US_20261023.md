@@ -11,9 +11,9 @@
 ## 목표 원천/세부항목 (관리 기준, 수집완료 표시가 아님)
 - 탄산리튬: Fastmarkets Spot Price CIF, GFEX 선물, SMM 함세가, SMM 세전가
 - 수산화리튬: Fastmarkets Spot Price CIF, SMM 함세가, SMM 세전가
-- 니켈: LME, SMM (황산니켈 환산 함세/세전 별개)
-- 코발트: LME, Fastmarkets, SMM (황산코발트 환산 함세/세전 별개)
-- 망간: Fastmarkets, LME 참조 × 20.9% (적용 품목/환산 검증 전 계산 금지)
+- 니켈: LME. 황산니켈 환산 지표(LME × 22.3% 등)는 원문 정의와 환산 기준이 입증될 때만 별도 시리즈로 표현; SMM 함세/세전 독립 기록.
+- 코발트: LME, Fastmarkets. 황산코발트 환산(LME × 20.9%, FMB × 20.9% 등)은 원문 기준을 확인한 별도 계산 시리즈로 취급; SMM 함세/세전 독립 기록.
+- 망간: SMM 함세/세전, Fastmarkets (LME × 20.9%는 망간 항목으로 오배치하지 않음).
 - 구리: LME, SMM
 - BM NCM/NCA CIF, BM LCO Co payable %, BM NCM Nickel/Cobalt payable % (서로 다른 단위)
 - USD, CNH, JPY(100), EUR 등 SMBS 환율 + 중국은행 환율 원천은 별도
