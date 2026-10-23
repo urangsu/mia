@@ -1,44 +1,42 @@
-MIA TEXT BRING-IN / SUPT 방식 오프라인 소스 복원
-작성 2026-10-23 KST
+MIA / SUPT TEXT BRING-IN - 실제 소스 TXT 복원 (2026-10-23)
 
-이 디렉터리의 TXT 파트는 단순한 설명서가 아니라 실제 소스 파일 데이터를 포함합니다.
-GitHub ZIP(codeload.github.com) 및 git pull이 차단된 회사 PC용입니다.
-안내 TXT를 Invoke-Expression으로 실행하지 마세요.
+이 폴더의 TXT는 설명서가 아니라 Base64 인코딩된 실제 소스입니다. Python 3로 무결성 검증 후 오프라인 복원 가능합니다.
+기존 git pull / GitHub ZIP(codeload) 경로를 쓸 수 없는 회사 PC에서 활용할 수 있습니다.
 
-본 프로그램 Collector
-  https://github.com/urangsu/mia/tree/main/bring_in
-  MIA_COLLECTOR_PART_01.txt ~ MIA_COLLECTOR_PART_11.txt (11개 모두 필요)
-  복원 기준 commit: 8b0fc14781f33b44e0c1e5a0b446dfe53000c0a3
-  소스 파일 106개, GUI/테스트/문서/requirements 포함.
-  이 번들은 2026-10-23 기준 해당 스냅샷이며 GitHub main의 이후 변경은 자동 반영되지 않습니다.
-  코드가 바뀌면 TXT 번들도 새 버전으로 재생성해야 합니다.
+[본 프로그램 Collector]
+MIA_COLLECTOR_PART_01.txt ~ MIA_COLLECTOR_PART_11.txt : 모두 필요, 소스 106개
+기준 소스 커밋: 8b0fc14781f33b44e0c1e5a0b446dfe53000c0a3
+해당 커밋의 파일 내용/원본 blob SHA1/크기를 확인하여 게시한 완전한 스냅샷입니다.
+이후 main의 새 변경은 자동 포함되지 않습니다. 최신 변경을 반영하려면 TXT 재생성이 필요합니다.
 
-DOM Inspector V4
-  MIA_DOM_PART_01.txt, MIA_DOM_PART_02.txt (대화의 V4 ZIP에서 생성된 두 개)
-  원본 ZIP SHA256: 66d97db7a663d514f31fbdbef5c6f62913d5c8b3feff1b4f48a0a9b1da525888
-  DOM 번들 파일이 GitHub에 없으면 대화의 MIA_DOM_TEXT_BUNDLE_V4.zip을 내려받으세요.
-  ZIP 안의 2개 TXT를 같은 폴더에 풀어 넣으세요.
+[DOM Inspector V4]
+이전 대화에서 만들어 제공한 MIA_TEXT_BRINGIN_DOM_V4_복원키트.zip에
+MIA_DOM_PART_01.txt + MIA_DOM_PART_02.txt 와 실행기가 들어있습니다.
+원본 MIA_DOM_Inspector_V4_미니패널.zip SHA256:
+66d97db7a663d514f31fbdbef5c6f62913d5c8b3feff1b4f48a0a9b1da525888
+현재 DOM V4 TXT 2개는 GitHub가 아니라 대화 다운로드 키트에서 제공됩니다.
+GitHub에서 Collector 번들을 내려받을 때 함께 별도 폴더에 보관하고, 같은 폴더에서 복원하세요.
 
-복원 실행
-  RESTORE_MIA_FROM_TXT.py, RESTORE_MIA_FROM_TXT.cmd,
-  MIA_COLLECTOR_PART_01.txt ~ 11.txt 와 MIA_DOM_PART_01.txt ~ 02.txt
-  파일들을 한 폴더에 배치합니다.
-  RESTORE_MIA_FROM_TXT.cmd 더블클릭 (Python 3 설치 시)
-  또는 PowerShell에서:
-    py -3 .\RESTORE_MIA_FROM_TXT.py --verify-only
-    py -3 .\RESTORE_MIA_FROM_TXT.py
-  한 종류만 복원할 때:
-    py -3 .\RESTORE_MIA_FROM_TXT.py --project collector
-    py -3 .\RESTORE_MIA_FROM_TXT.py --project dom
+[필요한 파일을 한 폴더에 배치]
+RESTORE_MIA_FROM_TXT.py
+RESTORE_MIA_FROM_TXT.cmd
+MIA_COLLECTOR_PART_01.txt ... MIA_COLLECTOR_PART_11.txt
+MIA_DOM_PART_01.txt / MIA_DOM_PART_02.txt
 
-복원 폴더 기본값
-  %LOCALAPPDATA%\MIA_Text_Restored\MIA_Collector_<commit>
-  %LOCALAPPDATA%\MIA_Text_Restored\MIA_DOM_V4_<bundleid>
+[복원 및 확인 - 인터넷 연결 없음]
+RESTORE_MIA_FROM_TXT.cmd 더블클릭 또는 PowerShell:
+py -3 .\RESTORE_MIA_FROM_TXT.py --verify-only
+py -3 .\RESTORE_MIA_FROM_TXT.py
+단독:
+py -3 .\RESTORE_MIA_FROM_TXT.py --project collector
+py -3 .\RESTORE_MIA_FROM_TXT.py --project dom
 
-실행 전 주의
-  - TXT 전체를 다운로드하세요. GitHub 화면의 미리보기 복사/붙여넣기 불가.
-  - 모든 파트는 동일 기준 버전이어야 합니다. 누락·손상 시 복원 거부.
-  - 기존 Collector/DOM, SQLite/Excel/ECM/예약작업/Chrome 설정 무변경.
-  - Collector Python 라이브러리와 사내 사이트 인수는 별도입니다.
-  - DOM은 chrome://extensions에서 복원 폴더를 수동 로드합니다.
-  - 기업 보안정책상 허용된 파일전달 및 확장 설치 방법만 사용하세요.
+복원된 파일은 %LOCALAPPDATA%\MIA_Text_Restored\ 아래 별도의 버전별 폴더에 생성됩니다.
+기존 소스/설정/SQLite/Excel/ECM/예약/브라우저는 자동 수정하지 않습니다.
+검증에 실패하면 저장하지 않으며, 기존 파일을 강제 삭제·덮어쓰기하지 않습니다.
+회사 Windows/Python 의존성, Fastmarkets/ECM 연결, DOM 확장 실제 설치 허용 여부는 별도 확인이 필요합니다.
+
+[다운로드 주의]
+GitHub 화면의 미리보기 전체 복사가 아니라 파일을 Raw/Download로 완전히 저장하세요.
+회사가 GitHub 사이트까지 막으면 다른 승인된 환경에서 다운로드하여 회사 승인된 반입 방식으로 전달해야 합니다.
+회사 보안 정책 우회나 계정/회사 DOM 자료 업로드는 하지 않습니다.
