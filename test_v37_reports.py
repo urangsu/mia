@@ -141,7 +141,10 @@ class ReportTests(unittest.TestCase):
             self.assertIn('2,500.25',html)
             self.assertNotIn('9,999',html)
             self.assertIn(c.snapshot_id,html)
-            self.assertNotIn('<script',html)
+            self.assertIn('<script src="market_report.js" defer></script>',html)
+            self.assertTrue((Path(result['html']).parent / 'market_report.js').is_file())
+            self.assertIn('자료 기준 · 출처 · 검증 상태 펼치기',html)
+            self.assertNotIn('<script>alert(',html)
             prs=Presentation(result['pptx'])
             self.assertGreaterEqual(len(prs.slides),3)
             native=[cell.text for slide in prs.slides for shape in slide.shapes if shape.has_table for row in shape.table.rows for cell in row.cells]

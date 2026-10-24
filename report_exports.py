@@ -40,8 +40,22 @@ def export_html(context,path):
                 cells.append(dict(text=display_value(value),css=css))
             body.append(cells)
         tables.append(dict(name=name,headers=rows[0],rows=body))
-    rendered=env.get_template('report_template.html').render(context=context,tables=tables)
+    from market_report_ui import dashboard_payload
+    from shutil import copyfile
+    dashboard=dashboard_payload(context)
+    # Data is HTML-escaped in a <template>, never executed as JavaScript.
+    # The static local JS has no network calls and is copied beside the report.
+    chart_json=canonical_json(dashboard)
+    rendered=env.get_template('report_template.html').render(
+        context=context,tables=tables,dashboard=dashboard,dashboard_json=chart_json)
+    path=Path(path)
     _atomic(path,lambda p:p.write_text(rendered,encoding='utf-8'))
+    script_source=Path(__file__).with_name('market_report.js')
+    script_target=path.with_name('market_report.js')
+    # Ensure the HTML is self-contained within its output DIRECTORY (no CDN).
+    # Atomic replace avoids partially written scripts after an interrupted export.
+    if not script_target.exists() or script_target.read_bytes()!=script_source.read_bytes():
+        _atomic(script_target,lambda p:copyfile(script_source,p))
     return str(path)
 
 def export_pptx(context,path):
