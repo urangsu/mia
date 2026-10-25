@@ -40,7 +40,7 @@ def now():return datetime.now(timezone.utc).isoformat()
 def start_run(db,settings=None):
     migrate_database(db);run_id=uuid.uuid4().hex
     # Only operational nonsecret settings. Never persist login fields.
-    settings={k:v for k,v in (settings or {}).items() if k in {'lookback_days','workspace_url','data_dir','workbook_path','naver_enabled'}}
+    settings={k:v for k,v in (settings or {}).items() if k in {'lookback_days','workspace_url','data_dir','workbook_path','naver_enabled','fdr_enabled','fdr_stock_codes','fdr_timeout'}}
     with closing(sqlite3.connect(db,timeout=30)) as cx,cx:
         cx.execute('INSERT INTO v37_runs VALUES(?,?,?,?,?)',(run_id,now(),None,'running',json.dumps(settings,ensure_ascii=False)))
     return run_id

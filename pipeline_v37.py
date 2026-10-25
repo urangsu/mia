@@ -153,6 +153,16 @@ def run_collection(settings,browser,cancelled,logger=print):
             diag['fx'],_=stage('fx',fx if settings.get('fx_enabled',True) else lambda:{'status':'disabled'})
             if checkpoint():return output
 
+            if settings.get('fdr_enabled',False):
+                def public_history():
+                    from fdr_provider import collect_and_save
+                    return collect_and_save(db,cancel,logger,
+                        stock_codes=settings.get('fdr_stock_codes',['005490']),
+                        timeout=settings.get('fdr_timeout',20),force=bool(settings.get('fdr_force',False)))
+                diag['fdr'],_=stage('fdr',public_history)
+            else:diag['fdr']={'status':'disabled'}
+            if checkpoint():return output
+
             if settings.get('naver_enabled',True):
                 def naver():
                     driver=browser.driver
@@ -167,7 +177,10 @@ def run_collection(settings,browser,cancelled,logger=print):
             if checkpoint():return output
 
             def csv():
-                core.export_files(folder)
+                if settings.get('fmb_enabled',True):core.export_files(folder)
+                if settings.get('fdr_enabled',False):
+                    from fdr_provider import export_csv
+                    export_csv(db,folder/'public_closes.csv')
                 return {'status':'complete'}
             stage('csv',csv)
             if checkpoint():return output

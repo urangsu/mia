@@ -185,7 +185,7 @@ class MainWindow(QMainWindow):
         self.search.setAccessibleName('저장 자료 검색')
         layout.addWidget(self.search)
         tabs = QTabWidget()
-        names = ('금속', '환율', '확정 종가', '시총 원자료', '시총 비교', '종합')
+        names = ('금속', '환율', '확정 종가', '시총 원자료', '시총 비교', '종합','주가 종가')
         for name, title in zip(REPORT_NAMES, names):
             table = DataTable(onboard=True)
             table.onboarding.connect(lambda action: self.nav.setCurrentRow(4) if action == 'settings' else self.submit('diagnose'))
@@ -303,11 +303,20 @@ class MainWindow(QMainWindow):
         self.fields['lookback_days'] = days
         form.addRow('수집 기간 (일)', days)
         sources = QHBoxLayout()
-        for key, label in (('fmb_enabled', 'Fastmarkets'), ('fx_enabled', 'SMBS 환율'), ('naver_enabled', 'NAVER 확정 종가')):
+        for key, label in (('fmb_enabled', 'Fastmarkets'), ('fx_enabled', 'SMBS 환율'), ('naver_enabled', 'NAVER DOM'),('fdr_enabled','FDR 공개 종가')):
             field = QCheckBox(label)
             self.fields[key] = field
             sources.addWidget(field)
         form.addRow('수집원', sources)
+        self.fields['fdr_stock_codes']=QLineEdit()
+        self.fields['fdr_stock_codes'].setAccessibleName('FDR 관심종목 코드')
+        self.fields['fdr_stock_codes'].setPlaceholderText('005490,005930 · 최대 25개')
+        form.addRow('FDR 관심종목',self.fields['fdr_stock_codes'])
+        timeout=QSpinBox();timeout.setRange(1,120);timeout.setSuffix(' 초 / 종목')
+        self.fields['fdr_timeout']=timeout
+        form.addRow('공개 조회 제한',timeout)
+        note=QLabel('FDR은 브라우저 없이 공개 HTTP 이력을 조회합니다. 금/WTI는 연속선물 Close이며 한국10년·과거 시총은 지원하지 않습니다.')
+        note.setWordWrap(True);note.setObjectName('muted');form.addRow(note)
         form = group('Chrome 연결·계정')
         ports = QLabel('9444  Fastmarkets 전용\n9222  기존 Chrome 보호 · 9337  관리자 Edge 보호 (접근하지 않음)')
         ports.setWordWrap(True)
@@ -351,7 +360,7 @@ class MainWindow(QMainWindow):
 
     def load_settings(self, settings):
         for key, field in self.fields.items():
-            value = settings.get(key, 31 if key == 'lookback_days' else True if key.endswith('_enabled') else '08:30' if key == 'v37_auto_time' else '')
+            value = settings.get(key, ['005490'] if key=='fdr_stock_codes' else 20 if key=='fdr_timeout' else 31 if key == 'lookback_days' else True if key.endswith('_enabled') else '08:30' if key == 'v37_auto_time' else '')
             if isinstance(field, QCheckBox):
                 field.setChecked(bool(value))
             elif isinstance(field, QSpinBox):
@@ -365,6 +374,7 @@ class MainWindow(QMainWindow):
         for key, field in self.fields.items():
             result[key] = field.isChecked() if isinstance(field, QCheckBox) else field.value() if isinstance(field, QSpinBox) else field.text().strip()
         result['representative_symbols'] = [x.strip() for x in result['representative_symbols'].split(',') if x.strip()]
+        result['fdr_stock_codes']=[x.strip() for x in result['fdr_stock_codes'].split(',') if x.strip()]
         result.pop('password', None)
         result.pop('username', None)
         return result
