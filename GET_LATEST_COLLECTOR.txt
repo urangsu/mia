@@ -1,4 +1,10 @@
-MIA Collector 최신 소스 가져오기 - SUPT 방식 / 오프라인 TXT 복원
+현재 개선판: docs/METALS_RECOVERY_GUIDE_20261025.md 참고
+새 단일 TXT: bring_in/MIA_SOURCE_CURRENT.txt + bring_in/RESTORE_LATEST_SOURCE.py
+검증: py RESTORE_LATEST_SOURCE.py --verify-only
+복원: py RESTORE_LATEST_SOURCE.py (기존 폴더 덮어쓰기 금지)
+TXT 헤더 source_commit이 실제 포함된 소스 버전입니다. 아래 PART 안내는 과거 기록입니다.
+
+MIA Collector 과거 소스 가져오기 - SUPT 방식 / 오프라인 TXT 복원
 날짜: 2026-10-23
 
 저장소: https://github.com/urangsu/mia
