@@ -8,13 +8,15 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QLabel,
     QPushButton, QListWidget, QStackedWidget, QLineEdit, QSpinBox, QCheckBox,
     QGroupBox, QFormLayout, QScrollArea, QTabWidget, QPlainTextEdit,
-    QFileDialog, QMessageBox, QComboBox,
+    QFileDialog, QMessageBox, QComboBox, QToolButton,
 )
-from desktop_tables import DataTable, SnapshotSummary, history_rows, ecm_rows, existing_output_paths, concise_feedback, report_summary
+from desktop_tables import DataTable, SnapshotSummary, history_rows, ecm_rows, existing_output_paths, concise_feedback, report_summary, collection_issues
+from desktop_metals import MetalPanel
 from desktop_theme import apply_theme
 from report_model import REPORT_NAMES
 
 LABELS = {'snapshot': '자료 새로고침', 'history': '실행 기록 조회', 'save_settings': '설정 저장',
+          'collect_public':'공개 종가만 수집',
           'connect': 'Chrome 연결·로그인', 'collect': '시세 수집', 'export': '누적 Excel 갱신',
           'reports': '보고서 생성', 'ecm_preview': 'ECM 변경 미리보기', 'ecm_apply': 'ECM 승인 적용',
           'credentials_save': '계정 저장', 'credentials_delete': '저장 계정 삭제',
@@ -40,7 +42,7 @@ class ServiceWorker(QObject):
             result = self.service.run(action, settings=settings, **payload)
             if not isinstance(result, dict) or result.get('status') not in STATES:
                 raise RuntimeError('작업 결과 형식을 확인할 수 없습니다.')
-            if action in ('reports', 'export', 'collect'):
+            if action in ('reports', 'export', 'collect','collect_public'):
                 result = dict(result)
                 result['data'] = dict(result.get('data') or {})
                 result['data']['_ui_files'] = existing_output_paths(result['data'])
@@ -166,7 +168,7 @@ class MainWindow(QMainWindow):
         return button
 
     def _dashboard(self):
-        layout = self.page('시장 자료, 한눈에', '실시간 호가가 아닌 저장된 관측입니다. 두 확정 종가가 없으면 이력 부족으로 남습니다.')
+        layout = self.page('원료·금속 시황', '리튬 · 니켈 · 코발트 · 망간 · 구리 · 블랙매스 — 출처와 조건이 확인된 저장 시세')
         bar = QHBoxLayout()
         self.as_of = QLabel('자료 기준 · 아직 없음')
         self.as_of.setObjectName('muted')
@@ -175,6 +177,7 @@ class MainWindow(QMainWindow):
         self.state_chip.setObjectName('stateChip')
         bar.addWidget(self.state_chip)
         bar.addWidget(self.button('snapshot'))
+        bar.addWidget(self.button('collect_public'))
         bar.addWidget(self.button('collect', primary=True))
         layout.addLayout(bar)
         self.summary = SnapshotSummary()
@@ -184,7 +187,9 @@ class MainWindow(QMainWindow):
         self.search.setClearButtonEnabled(True)
         self.search.setAccessibleName('저장 자료 검색')
         layout.addWidget(self.search)
-        tabs = QTabWidget()
+        tabs = self.dashboard_tabs = QTabWidget()
+        self.metals=MetalPanel();tabs.addTab(self.metals,'원료·금속 시황')
+        self.search.textChanged.connect(self.metals.search)
         names = ('금속', '환율', '확정 종가', '시총 원자료', '시총 비교', '종합','주가 종가')
         for name, title in zip(REPORT_NAMES, names):
             table = DataTable(onboard=True)
@@ -192,6 +197,7 @@ class MainWindow(QMainWindow):
             self.tables[name] = table
             tabs.addTab(table, title)
             self.search.textChanged.connect(table.search)
+        self.coverage_table=DataTable();tabs.addTab(self.coverage_table,'원천 수집 범위')
         layout.addWidget(tabs, 1)
         self.snapshot_warning = QLabel('자료 없음 · 수집 결과와 기준일을 확인하세요.')
         self.snapshot_warning.setObjectName('muted')
@@ -200,6 +206,10 @@ class MainWindow(QMainWindow):
         details = QPushButton('확인 내역 보기 → 실행 기록')
         details.clicked.connect(lambda: self.nav.setCurrentRow(3))
         layout.addWidget(details, alignment=Qt.AlignLeft)
+        self.collection_errors=QLabel();self.collection_errors.setWordWrap(True)
+        self.collection_errors.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.collection_errors.setObjectName('collectionErrors');self.collection_errors.hide()
+        layout.addWidget(self.collection_errors)
 
     def _reports(self):
         layout = self.page('자료·보고서', '저장된 DB로 출력을 다시 만듭니다. 아래 필터는 보고서에만 적용되며 누적 원본을 줄이지 않습니다.')
@@ -227,6 +237,15 @@ class MainWindow(QMainWindow):
         self.report_detail.setReadOnly(True)
         self.report_detail.setPlaceholderText('생성된 파일의 실제 경로와 출력 결과가 여기에 표시됩니다.')
         layout.addWidget(self.report_detail, 1)
+        self.sources_toggle=QToolButton();self.sources_toggle.setText('자료 기준 · 펼치기')
+        self.sources_toggle.setCheckable(True);self.sources_toggle.setArrowType(Qt.RightArrow)
+        self.sources_toggle.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.sources_toggle.setAccessibleName('자료 기준 펼치기 또는 접기')
+        layout.addWidget(self.sources_toggle)
+        self.report_sources=QPlainTextEdit();self.report_sources.setReadOnly(True)
+        self.report_sources.setMaximumHeight(180);self.report_sources.hide();layout.addWidget(self.report_sources)
+        self.sources_toggle.toggled.connect(self.report_sources.setVisible)
+        self.sources_toggle.toggled.connect(lambda opened:self.sources_toggle.setArrowType(Qt.DownArrow if opened else Qt.RightArrow))
 
     def _ecm(self):
         layout = self.page('ECM 승인 작업', '기존 일반 Edge와 Excel 문서를 확인합니다. 미리보기 후 별도 승인한 셀만 반영합니다.')
@@ -448,7 +467,7 @@ class MainWindow(QMainWindow):
             self._set_busy(False)
             if self._closing:
                 self._begin_shutdown()
-            elif rendered and action in ('collect', 'export') and result['status'] in ('complete', 'partial'):
+            elif rendered and action in ('collect','collect_public', 'export') and result['status'] in ('complete', 'partial'):
                 self.submit('snapshot', _settings=self._active_settings, _background=True)
 
     def _present_result(self, action, result, background):
@@ -487,19 +506,28 @@ class MainWindow(QMainWindow):
             self.ecm_table.set_rows(ecm_rows(edits) if valid else [])
             if self._preview_settings != self.current_settings():
                 self.invalidate_preview()
-        if action in ('collect', 'export', 'ecm_apply'):
+        if action in ('collect','collect_public', 'export', 'ecm_apply'):
             self.pending_plan = None
         if action == 'ecm_apply':
             self.ecm_detail.appendPlainText(f'\n{STATES[state]} · {feedback}\n서버 반영 미확인 — 체크인 결과를 별도 확인하세요.')
-        if action in ('reports', 'export', 'collect'):
+        if action in ('reports', 'export', 'collect','collect_public'):
             self._output_paths(data.pop('_ui_files', []))
             self.log.appendPlainText(json.dumps(data, ensure_ascii=False, indent=2, default=str))
             self.report_detail.setPlainText(report_summary(LABELS[action], STATES[state], feedback, self.report_paths))
+        if action in ('collect','collect_public'):
+            issues=collection_issues(data.get('diag',{}))
+            self.collection_errors.setText(issues);self.collection_errors.setVisible(bool(issues))
+            self.report_detail.appendPlainText('\n'+issues if issues else '')
         if action in ('schedule_status', 'schedule_register', 'schedule_remove', 'diagnose'):
             self.log.appendPlainText(json.dumps(data, ensure_ascii=False, indent=2, default=str))
 
     def render_snapshot(self, data):
         self._snapshot = data
+        self.metals.set_data(data.get('metals',{}))
+        coverage=data.get('metals',{}).get('coverage',[])
+        self.coverage_table.set_rows([('출처','제품/계약','상태','저장 시리즈 수','확인 근거·제약')]+[
+            (r['source'],r['product'],r['status'],r['count'],r['reason']) for r in coverage])
+        self.report_sources.setPlainText(json.dumps({k:data.get(k) for k in ('snapshot_id','as_of','source_dates','warnings')},ensure_ascii=False,indent=2,default=str))
         self.summary.update_snapshot(data, self.current_settings().get('representative_symbols', []))
         for name, table in self.tables.items():
             table.set_rows(data.get('tables', {}).get(name, []))
