@@ -45,8 +45,10 @@ def build(repo,revision,output):
         files[name]=git('show',commit+':'+name)
     # Include only the new restoration helper, never the old nested bundles.
     helper='bring_in/RESTORE_LATEST_SOURCE.py';files[helper]=git('show',commit+':'+helper)
+    launcher='bring_in/RESTORE_LATEST_SOURCE.cmd';files[launcher]=git('show',commit+':'+launcher)
     result=write_bundle(files,commit,output)
     (Path(output)/'RESTORE_LATEST_SOURCE.py').write_bytes(files[helper])
+    (Path(output)/'RESTORE_LATEST_SOURCE.cmd').write_bytes(files[launcher])
     return result
 
 

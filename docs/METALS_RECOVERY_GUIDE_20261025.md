@@ -43,6 +43,8 @@ py collect_evidence_v37.py --output evidence_v37.json
 
 새 형식은 `MIA_SOURCE_CURRENT.txt`와 `RESTORE_LATEST_SOURCE.py`다. 기존 PART/LZW ONEFILE과 섞지 않는다. 두 파일을 같은 폴더에 놓는다.
 
+선택 사항으로 같은 폴더의 `RESTORE_LATEST_SOURCE.cmd`를 더블클릭하면 검증→복원을 순서대로 실행한다. 외부 의존성을 자동 설치하거나 회사 브라우저/DB를 변경하지 않는다.
+
 ```text
 py RESTORE_LATEST_SOURCE.py --verify-only
 py RESTORE_LATEST_SOURCE.py
