@@ -44,6 +44,8 @@ python -m pip check
 
 새 단일 TXT/ZIP은 지정된 Git 커밋에서만 생성한다. TXT ZIP SHA-256, manifest SHA-256, 각 소스 SHA-256, 상대경로/중복/심볼릭링크/크기 제한, 기존 폴더 거부를 검사한다. 예전 LZW ONEFILE/PART와 섞으면 형식 오류로 거부한다. 최종 패키지는 코드 커밋 후 재복원·전체 테스트를 다시 실행하고 TXT 헤더 source_commit으로 정확한 범위를 식별한다. 해시는 무결성 검증이며 발행자 인증 서명이 아니다.
 
+실제 복원 검증: 코드 커밋 c4bdc73df82efc46384858c05e3137cbbba8197e에서130개 소스를 패키징하고 새 임시 폴더로 SHA-256 검증 복원. 그 복원본에서 전체314개 테스트 재통과(11.981초, exit0). ZIP SHA-256은0d6e04e0cac60da39e2255bcb1ec6e75d759d8a41ebe7c485e2db990901ff289였다. 최종 전달본은 이 증거 기록과 편의 CMD를 포함해 다시 생성하므로 정확한 최종 커밋/해시는 TXT 헤더를 따른다. Windows CMD 실제 더블클릭은 이 Mac에서 실행하지 않았다.
+
 ## 미완료 / 회사 인수
 
 - 실제 회사 '수집 실패' 원인: 마지막 오류/last_diagnostic.json과 diagnose_windows --driver-check가 필요. Chrome9444 로그인·전체 품목 inventory/BM 날짜·실제 NAVER 새 SPA DOM·공식 CSV 대조는 미검증이다.
