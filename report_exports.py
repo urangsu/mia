@@ -40,7 +40,10 @@ def export_html(context,path):
                 cells.append(dict(text=display_value(value),css=css))
             body.append(cells)
         tables.append(dict(name=name,headers=rows[0],rows=body))
-    rendered=env.get_template('report_template.html').render(context=context,tables=tables)
+    failures=[w for w in context.warnings if any(k in w.casefold() for k in ('failed','실패','충돌','철회','mismatch','auth'))]
+    notices=[w for w in context.warnings if w not in failures]
+    top_warnings=failures+notices[:max(0,3-len(failures))]
+    rendered=env.get_template('report_template.html').render(context=context,tables=tables,top_warnings=top_warnings)
     _atomic(path,lambda p:p.write_text(rendered,encoding='utf-8'))
     return str(path)
 
@@ -61,7 +64,9 @@ def export_pptx(context,path):
     for name in REPORT_NAMES:
         if name=='보고용_종합':continue
         rows=context.tables[name];body=rows[1:]
-        pages=[body[i:i+8] for i in range(0,len(body),8)] or [()]
+        metal=name=='보고용_금속시세'
+        page_size=3 if metal else 8
+        pages=[body[i:i+page_size] for i in range(0,len(body),page_size)] or [()]
         for index,page in enumerate(pages,1):
             slide=prs.slides.add_slide(prs.slide_layouts[6]);slide.background.fill.solid();slide.background.fill.fore_color.rgb=bg
             text(slide,context.label,0.55,.3,14.8,.4,14,muted)
@@ -69,6 +74,10 @@ def export_pptx(context,path):
             table=slide.shapes.add_table(len(page)+1,len(rows[0]),Inches(.55),Inches(1.65),Inches(14.9),Inches(.65*(len(page)+1))).table
             # Source URLs wrap, leaving ample room for dates and numeric columns.
             widths_by_header={'출처':3.6,'단위':1.3,'상태':1.7,'지표':1.4,'종목명':1.8,'시장일':1.5,'비교일':1.5,'고시일':1.5,'순위':.8,'코드':1.3}
+            if metal:
+                widths_by_header.update({'품목명':2.1,'고시일':1.3,'Mid':1,'구분':1.1,'출처':2.2,'그룹':.9,'원본 조건':4})
+                table.rows[0].height=Inches(.55)
+                for row in list(table.rows)[1:]:row.height=Inches(1.6)
             widths=[widths_by_header.get(header,1.5) for header in rows[0]]
             scale=14.9/sum(widths)
             for i,w in enumerate(widths):table.columns[i].width=Inches(w*scale)
@@ -78,7 +87,7 @@ def export_pptx(context,path):
                     cell.margin_left=Inches(.08);cell.margin_right=Inches(.08);cell.margin_top=Inches(.06);cell.margin_bottom=Inches(.03)
                     cell.vertical_anchor=MSO_ANCHOR.MIDDLE;cell.fill.solid();cell.fill.fore_color.rgb=RGBColor.from_string('202025' if ridx==0 else '17171C')
                     for p in cell.text_frame.paragraphs:
-                        p.font.name='Malgun Gothic';p.font.size=Pt(13 if ridx else 12);p.font.color.rgb=fg if ridx else muted
+                        p.font.name='Malgun Gothic';p.font.size=Pt(10 if metal and rows[0][cidx] in ('원본 조건','출처') else 13 if ridx else 12);p.font.color.rgb=fg if ridx else muted
                         if isinstance(value,(int,float)):p.alignment=PP_ALIGN.RIGHT
                         if ridx and rows[0][cidx] in ('전일대비','등락률(%)') and isinstance(value,(int,float)) and value:
                             p.font.color.rgb=RGBColor.from_string('F5445A' if value>0 else '4391FF')
