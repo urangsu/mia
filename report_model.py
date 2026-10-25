@@ -12,7 +12,7 @@ import json
 import sqlite3
 import math
 
-REPORT_NAMES=('보고용_금속시세','보고용_환율','보고용_시장지표','증시_시총스냅샷','보고용_시총','보고용_종합')
+REPORT_NAMES=('보고용_금속시세','보고용_환율','보고용_시장지표','증시_시총스냅샷','보고용_시총','보고용_종합','보고용_주가')
 
 def _freeze_tables(tables):
     return MappingProxyType({k:tuple(tuple(row) for row in rows) for k,rows in tables.items()})
@@ -70,12 +70,14 @@ def _data_as_of(observations):
         candidates.append(stamp)
     return max(candidates).isoformat() if candidates else ''
 
-def build_context(folder,start=None,end=None,series=None,*,synthetic=False,workspace_id=None):
+def build_context(folder,start=None,end=None,series=None,*,synthetic=False,workspace_id=None,captured_at=None):
     import FastmarketsCollector_v3_4 as core
     from smbs_rates import FXQuote,prepare_excel_series
     from excel_secure import make_sheets
     folder=Path(folder)
-    kst_today=datetime.now(timezone(timedelta(hours=9))).date().isoformat()
+    capture=datetime.fromisoformat(captured_at) if captured_at else datetime.now(timezone(timedelta(hours=9)))
+    if capture.tzinfo is None:raise ValueError('보고 기준 시각에 시간대가 필요합니다.')
+    kst_today=capture.astimezone(timezone(timedelta(hours=9))).date().isoformat()
     end=end or kst_today
     date.fromisoformat(end)
     if start:date.fromisoformat(start)
@@ -97,6 +99,8 @@ def build_context(folder,start=None,end=None,series=None,*,synthetic=False,works
                 if table in existing:
                     raw[table]=[dict(row) for row in cx.execute('SELECT * FROM '+table+' ORDER BY rowid')]
                 else:warnings.append(table+': 저장 자료 없음')
+            for table in ('fdr_observations','fdr_targets','fdr_quarantine'):
+                raw[table]=[dict(row) for row in cx.execute('SELECT * FROM '+table+' ORDER BY rowid')] if table in existing else []
             if 'price_revisions' in existing:
                 for r in cx.execute('''SELECT symbol,assessment_date,unit,price_mode,view_key FROM price_revisions
                     WHERE workspace_id=? AND json_extract(old_values,'$[1]') IS NOT NULL
@@ -140,6 +144,16 @@ def build_context(folder,start=None,end=None,series=None,*,synthetic=False,works
                 warnings.append(f"NAVER {r[code]} {r['market_date']}: 당일·장중·미검증 수치 제외 (기준일 {naver_cutoff} 이전 확정 종가만 사용)");continue
             dest.append(r)
             observations.append((r.get('captured_at'),False))
+    public=dict(indicators=[],pairs={},stocks=[],warnings=[],withdrawn=[],quarantine=[])
+    if raw.get('fdr_targets'):
+        from fdr_reporting import prepare
+        # Historical reports retain the same morning convention; today's report
+        # uses the actual capture instant, never an assumed market close.
+        public_capture=capture if naver_cutoff==kst_today else datetime.fromisoformat(naver_cutoff+'T08:30:00+09:00')
+        public=prepare(raw.get('fdr_observations',[]),raw['fdr_targets'],public_capture,start=start,end=naver_cutoff,series=selected,quarantine=raw.get('fdr_quarantine',[]))
+        indicators=[r for r in indicators if r['instrument_id'] not in public['pairs']]+public['indicators']
+        warnings.extend(public['warnings'])
+        observations.extend((r.get('captured_at'),False) for r in public['observations'])
     prices.sort(key=lambda p:(p.date,p.symbol,p.view_key),reverse=True)
     if withdrawn:
         warnings.append(f'가격 정정으로 기존 Mid {len(withdrawn)}개 철회: 누적 Excel/ECM 기존 수치를 비움 대상으로 표시')
@@ -147,17 +161,24 @@ def build_context(folder,start=None,end=None,series=None,*,synthetic=False,works
     sheets=make_sheets(prices,core.latest_quotes(prices,today=date.fromisoformat(end)),quotes,withdrawn=withdrawn)
     sheets['워크스페이스원본']=[('workspace_id','symbol','assessment_date','low','mid','high','unit','price_mode','view_key','source','collected_at')]+provenance
     # Raw NAVER observations retain each actual market date; stock ranks never join daily columns.
-    naver_keys=sorted({f"NAVER|{r['instrument_id']}|{r['unit']}|Actual|MID" for r in indicators})
+    def indicator_key(r):
+        source='FDR' if r.get('provider')=='FinanceDataReader' else 'NAVER'
+        return f"{source}|{r['instrument_id']}|{r['unit']}|Actual|MID"
+    naver_keys=sorted({indicator_key(r) for r in indicators}|{k for _,k in public['withdrawn']})
     naver_daily=defaultdict(dict)
     for r in indicators:
-        key=f"NAVER|{r['instrument_id']}|{r['unit']}|Actual|MID"
+        key=indicator_key(r)
         if _number(r['value']) is not None:naver_daily[r['market_date']][key]=_number(r['value'])
+    for day,key in public['withdrawn']:
+        naver_daily[day][key]=None
+        for tab in ('일별시세','일별요약'):
+            sheets['보류셀'].append((tab,day,key,'FDR 同日 Close 충돌: 기존 수치 철회'))
     if naver_keys:
         labels={k:f"{k.split('|')[1]} ({k.split('|')[2]})" for k in naver_keys}
-        sheets['가격열설정'] += [(k,labels[k],'NAVER / '+k.split('|')[2]) for k in naver_keys]
+        sheets['가격열설정'] += [(k,labels[k],k.split('|')[0]+' / '+k.split('|')[2]) for k in naver_keys]
         old=sheets['일별시세']; merged={r[0]:list(r[1:]) for r in old[2:]}
         all_dates=sorted(set(merged)|set(naver_daily))
-        headers=[tuple(old[0])+tuple(labels[k] for k in naver_keys),tuple(old[1])+tuple('NAVER' for k in naver_keys)]
+        headers=[tuple(old[0])+tuple(labels[k] for k in naver_keys),tuple(old[1])+tuple(k.split('|')[0] for k in naver_keys)]
         sheets['일별시세']=headers+[tuple([dt]+merged.get(dt,[None]*(len(old[0])-1))+[naver_daily[dt].get(k) for k in naver_keys]) for dt in all_dates]
         sheets['일별요약']=list(sheets['일별시세'])
         acc=defaultdict(lambda:defaultdict(list))
@@ -168,18 +189,23 @@ def build_context(folder,start=None,end=None,series=None,*,synthetic=False,works
             sheets[name]=[('기준월',)+sheets['일별시세'][0][1:],sheets['일별시세'][1]]+[
                 tuple([month]+[(len(acc[month][i]) if count else sum(acc[month][i])/len(acc[month][i])) if acc[month][i] else (0 if count else None) for i in range(len(sheets['일별시세'][0])-1)])
                 for month in sorted({row[0][:7] for row in sheets['일별시세'][2:]})]
+        for day,key in public['withdrawn']:
+            if not acc[day[:7]][len(old[0])-1+naver_keys.index(key)]:
+                sheets['보류셀'].append(('월별시세',day[:7],key,'FDR 충돌 후 검증된 월별 표본 없음'))
     def latest(rows,key):
         result={}
         for r in sorted(rows,key=lambda r:(r['market_date'],r['captured_at'])):result[r[key]]=r
         return list(result.values())
-    metals=[('종목','고시일','Mid','단위','구분','출처')]
+    from series_mapping import product_info
+    metals=[('품목명','고시일','Mid','단위','구분','출처','코드','그룹','원본 조건')]
     identities={}
     for p in prices:
         if p.price_mode not in {'Actual','Forecast','Unspecified'} or p.period_label:continue
         key=f'FMB|{p.symbol}|{p.unit}|{p.price_mode}|MID'
         identities.setdefault(key,p)
     for key,p in sorted(identities.items()):
-        metals.append((p.symbol,p.date,records.get(p.date,{}).get(key),p.unit,p.price_mode,p.source))
+        product=product_info(p.symbol,p.description,p.unit,p.price_mode)
+        metals.append((product['name'],p.date,records.get(p.date,{}).get(key),p.unit,p.price_mode,p.source,p.symbol,product['group'],product['conditions']))
     fx=[('통화','고시일','매매기준율','전일대비','단위','출처')]
     latest_fx={}
     for q in sorted(quotes,key=lambda q:q.quote_date):
@@ -195,9 +221,10 @@ def build_context(folder,start=None,end=None,series=None,*,synthetic=False,works
     from naver_close import select_closes
     from naver_markets import INDICATORS
     present={r['instrument_id'] for r in indicators}
-    expected=[code for code in INDICATORS if selected is None or code in selected or any(str(key).startswith('NAVER|'+code+'|') for key in selected)]
+    expected=[code for code in INDICATORS if selected is None or code in selected or any(str(key).startswith(('NAVER|'+code+'|','FDR|'+code+'|')) for key in selected)]
     selector_rows=list(indicators)+[{'instrument_id':code,'status':'unverified'} for code in expected if code not in present]
     close_pairs=select_closes(selector_rows,naver_cutoff+'T00:00:00+09:00')
+    close_pairs['rows']=[public['pairs'].get(r['instrument_id'],r) for r in close_pairs['rows']]
     warnings.extend(close_pairs['warnings'])
     market=[('지표','시장일','수치','비교일','비교종가','전일대비','등락률(%)','단위','상태','출처')]
     indicator_order={code:i for i,code in enumerate(INDICATORS)}
@@ -225,6 +252,18 @@ def build_context(folder,start=None,end=None,series=None,*,synthetic=False,works
             value=None
         cap.append((r['rank'],r['name'],r['stock_code'],r['market_date'],value,cap_unit or '미확인',r['status'],r['source_url']))
     tables=dict(zip(REPORT_NAMES,(metals,fx,market,raw_cap,cap,[('구분','종목','시장·고시일','수치','단위','상태','출처')])))
+    stocks=[('코드','종목명','시장일','수치','비교일','비교종가','전일대비','등락률(%)','단위','상태','출처')]
+    for r in public['stocks']:
+        pct=_number(r['pct'])
+        stocks.append((r['instrument_id'],r['label'],r['previous_date'],_number(r['previous_close']),r['prior_date'],_number(r['prior_close']),_number(r['change']),round(pct,6) if pct is not None else None,r['unit'],r['status'],r['source_url']))
+    tables['보고용_주가']=stocks
+    public_raw=[r for r in raw.get('fdr_observations',[]) if dated(r,'market_date') and chosen(r['instrument_id'],f"FDR|{r['instrument_id']}|{r['unit']}|Actual|MID")]
+    if public_raw:
+        cols=tuple(sorted(public_raw[0]))
+        sheets['FDR_종가원본']=[cols]+[tuple(r.get(k) for k in cols) for r in public_raw]
+    held=[q for q in public['quarantine'] if dated(q,'market_date')]
+    if held:
+        cols=tuple(sorted(held[0]));sheets['FDR_보류이력']=[cols]+[tuple(r.get(k) for k in cols) for r in held]
     for table,name in (('market_indicators','NAVER_지표원본'),('equity_rank_snapshots','NAVER_시총원본')):
         selected_raw=naver_selected[table]
         if selected_raw:
@@ -234,8 +273,10 @@ def build_context(folder,start=None,end=None,series=None,*,synthetic=False,works
     for row in fx[1:]:tables['보고용_종합'].append(('환율',row[0],row[1],row[2],row[4],'고시',row[5]))
     for row in market[1:]:tables['보고용_종합'].append(('시장지표',row[0],row[1],row[2],row[7],row[8],row[9]))
     for row in cap[1:]:tables['보고용_종합'].append(('시총',row[2],row[3],row[4],row[5],row[6],row[7]))
+    for row in stocks[1:]:tables['보고용_종합'].append(('주가',row[0],row[2],row[3],row[8],row[9],row[10]))
     sheets.update(tables)
-    source_dates={'FMB':tuple(sorted({p.date for p in prices})), 'SMBS':tuple(sorted({q.quote_date for q in quotes})), 'NAVER 지표':tuple(sorted({r['market_date'] for r in indicators})), 'NAVER 시총':tuple(sorted({r['market_date'] for r in equities}))}
+    source_dates={'FMB':tuple(sorted({p.date for p in prices})), 'SMBS':tuple(sorted({q.quote_date for q in quotes})), 'NAVER 지표':tuple(sorted({r['market_date'] for r in indicators if r.get('provider')!='FinanceDataReader'})), 'NAVER 시총':tuple(sorted({r['market_date'] for r in equities}))}
+    if public_raw:source_dates['FDR 종가']=tuple(sorted({r['market_date'] for r in public_raw if dated(r,'market_date')}))
     context=ReportContext('',_data_as_of(observations), 'TEST / 합성 데이터' if synthetic else '시장 수치 보고서',_freeze_tables(tables),MappingProxyType(source_dates),tuple(dict.fromkeys(warnings)),active,start,end,_freeze_tables(sheets))
     from dataclasses import replace
     payload=context.to_dict();payload.pop('snapshot_id')

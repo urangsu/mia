@@ -1,5 +1,9 @@
 # 이어서 작업할 때
 
+2026-10-25 최신 후속: docs/METALS_RECOVERY_GUIDE_20261025.md와 검증 보고서 우선. main에 없던 FDR를 통합하고, metal_dashboard.py/desktop_metals.py로 동일 스냅샷의 금속 그룹·단위/뷰별 시계열과 결측을 연결했다. 보고서 품명/코드 분리, 자료 기준 접힘, 공개 전용 GUI와 단계 오류, Windows HTTP 작업자 UTF-8를 추가했다. 연구 보고서는 링크 전용 계획이며 자동 감시 미구현이다. old bring_in PART/ONEFILE은 과거 고정본이므로 새 MIA_SOURCE_CURRENT.txt+RESTORE_LATEST_SOURCE.py와 섞지 않는다. 사용자의 실제 '수집 실패' 로그는 아직 없어 회사 원인 확정/해결 주장 금지.
+
+2026-10-22: FinanceDataReader 공개 종가와 exchange_calendars를 독립 단계로 연결했습니다. 먼저 [운영 안내](docs/FDR_CALENDARS_GUIDE.md)와 [신규 검증 보고서](docs/FDR_CALENDARS_TEST_REPORT_20261022.md)를 읽으세요. fdr_provider.py는 공개 읽기/원본·정정·보류 이력, market_sessions.py는 기대 거래일, fdr_reporting.py는 두 종가 선택을 담당합니다. 한국 지수·관심종목은 NAVER, 해외는 Yahoo로 구분합니다. NAVER DOM 수집 자체를 고쳤다는 뜻은 아닙니다. KR10Y 미지원과 금/WTI 기대일 누락으로 실제 실행은 partial이었습니다. 회사 Windows·ECM·예약 실기동은 미검증입니다.
+
 현재 기능 우선 개발 브랜치는 FUNCTION_FIRST_README.md와 FUNCTION_FIRST_TEST_REPORT.md를 우선 확인하세요. 최신 UI는 desktop_ui.py, 작업은 desktop_controller.py, 설정은 app_settings.py입니다. 아래 hotfix1 설명은 당시 기록이며 이후 가격 범위가 바뀔 때 이전 Mid의 부적합 상속 방어가 추가됐습니다. NAVER 실DOM/과거 종가 자동 확보와 회사 인수는 여전히 남아 있습니다.
 
 2026-10-20 hotfix1: 첫 FMB 초기 조회, 보류값의 누적 Excel/ECM 반영과 열 키 유지, GUI 오류 복구를 수정했습니다. `FIXES_V37_HOTFIX1.md`와 `test_v37_recovery.py`를 확인하세요. DB 부분 정정 시 이전 Mid/새 범위 혼합 문제는 여전히 별도 P1이며 운영 적용 전 해결해야 합니다. 새 보류셀 시트는 프로그램 관리 영역입니다. 실제 Windows/보안 Excel/ECM 인수는 여전히 필요합니다.

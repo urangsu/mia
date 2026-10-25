@@ -26,7 +26,7 @@ class ControllerTests(unittest.TestCase):
 
     def test_snapshot_does_not_save_settings_or_create_db(self):
         self.cfg['workspace_url']=self.m.core.WORKSPACE_URL
-        context=SimpleNamespace(tables={},as_of='',snapshot_id='x',warnings=('자료 없음',))
+        context=SimpleNamespace(tables={},as_of='',snapshot_id='x',warnings=('자료 없음',),_sheets={},source_dates={})
         with patch('report_model.build_context', return_value=context), patch.object(self.m.core,'config_save') as save:
             result=self.service.run('snapshot',self.cfg)
         self.assertEqual(result['data']['snapshot_id'],'x')
@@ -35,7 +35,7 @@ class ControllerTests(unittest.TestCase):
 
     def test_snapshot_is_bound_to_service_workspace_not_global_config(self):
         self.cfg['workspace_url']='https://dashboard.fastmarkets.com/w/abcdefghijklmnop/'
-        context=SimpleNamespace(tables={},as_of='',snapshot_id='x',warnings=())
+        context=SimpleNamespace(tables={},as_of='',snapshot_id='x',warnings=(),_sheets={},source_dates={})
         with patch('report_model.build_context',return_value=context) as build:
             result=self.service.run('snapshot',self.cfg)
         self.assertEqual(result['status'],'complete')

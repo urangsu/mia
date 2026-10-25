@@ -1,8 +1,12 @@
 # mia · Fastmarkets Collector v3.7
 
+2026-10-25 금속 중심 개선판: [실행·수집 실패·새 TXT 복원 안내](docs/METALS_RECOVERY_GUIDE_20261025.md), [수정/검증/미완료](docs/METALS_RECOVERY_TEST_REPORT_20261025.md), [공식 리서치 링크 계획](docs/METAL_REPORT_LINKS_PLAN_20261025.md). 설치는 `requirements-desktop.txt`를 사용합니다. 기존 main의 10월23일 문서는 설계였으며 이 변경이 일부 P0/P1을 구현합니다. 전체 회사 수집 완료를 뜻하지 않습니다.
+
 현재 개발 브랜치의 기본 화면은 Qt입니다. **[기능 우선 개발판 실행·변경·남은 검증](FUNCTION_FIRST_README.md)**을 먼저 읽으세요. 설치: `py -m pip install -r requirements-desktop.txt`. 기존 Tk 화면은 `--legacy-gui`로 보존합니다. 회사 사이트 수집·보안 Excel·ECM 인수는 미완료이며 배포 승인본이 아닙니다.
 
 금속·환율·시장 확정 종가를 SQLite와 누적 Excel에 보관하고 HTML·편집 가능한 PPTX 보고서를 만드는 Windows 업무 도구입니다. 기본 예약 시각은 **08:30 KST**입니다.
+
+2026-10-22: [FinanceDataReader·거래일 캘린더 운영 안내](docs/FDR_CALENDARS_GUIDE.md)를 추가했습니다. 공개 종가 수집은 브라우저 없이 실행하며 기존 Fastmarkets/ECM 경로는 유지합니다. [신규 검증 결과와 미지원 범위](docs/FDR_CALENDARS_TEST_REPORT_20261022.md)를 확인하세요. 한국10년·시총 순위 자동 확보까지 완성된 것으로 해석하지 마세요.
 
 현재는 **실환경 인수 전 후보 빌드**입니다. 클라우드에서 통과한 모의 테스트가 회사 Windows·Fastmarkets 구독·NAVER 실DOM·ECM 서버 성공을 의미하지 않습니다.
 

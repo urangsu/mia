@@ -88,6 +88,16 @@ class DesktopTests(unittest.TestCase):
         self.assertEqual(self.service.settings['data_dir'], '/tmp/changed')
         self.assertNotEqual(self.service.calls[-1][3], threading.get_ident())
 
+    def test_public_source_settings_and_stock_close_table_connected(self):
+        self.assertIn('fdr_enabled',self.window.fields)
+        self.assertIn('보고용_주가',self.window.tables)
+        self.window.fields['fdr_enabled'].setChecked(True)
+        self.window.fields['fdr_stock_codes'].setText('005490,005930')
+        self.window.fields['fdr_timeout'].setValue(12)
+        self.window.buttons['save_settings'].click();self.wait_idle()
+        self.assertEqual(self.service.settings['fdr_stock_codes'],['005490','005930'])
+        self.assertEqual(self.service.settings['fdr_timeout'],12)
+
     def test_password_is_one_time_and_not_saved(self):
         self.window.username.setText('user')
         self.window.password.setText('secret')

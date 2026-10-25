@@ -1,4 +1,11 @@
-MIA 오프라인 복원: PART 11개 대신 ONEFILE 1개
+2026-10-25 개선판은 MIA_SOURCE_CURRENT.txt + RESTORE_LATEST_SOURCE.py를 사용하세요.
+기존 LZW ONEFILE/PART와 호환되지 않으므로 섞지 마세요.
+py RESTORE_LATEST_SOURCE.py --verify-only
+py RESTORE_LATEST_SOURCE.py
+새 폴더만 생성하고 모든 소스의 SHA-256을 확인합니다. 설치: requirements-desktop.txt.
+아래는 이전 8b0fc147 고정본 보존 안내이며 새 기능을 포함하지 않습니다.
+
+MIA 과거 오프라인 복원: PART 11개 대신 ONEFILE 1개
 
 현재 권장 파일 (2026-10-23):
   1. 본 프로그램: MIA_COLLECTOR_ONEFILE.txt (GitHub 이 폴더에 포함)

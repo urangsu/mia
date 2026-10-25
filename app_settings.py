@@ -8,7 +8,8 @@ from urllib.parse import urlsplit, parse_qsl
 
 EXTRA_DEFAULTS = dict(settings_version=1, fmb_enabled=True, fx_enabled=True,
                       naver_enabled=True, report_dir='', driver_path='',
-                      representative_symbols=[])
+                      representative_symbols=[],fdr_enabled=True,
+                      fdr_stock_codes=['005490'],fdr_timeout=20)
 SECRET = re.compile(r'password|passwd|token|cookie|secret|authorization|api[_-]?key|access[_-]?key', re.I)
 
 
@@ -60,7 +61,7 @@ def validate(values, action):
     """Return a snapshot; unrelated sources/documents do not gate an action."""
     cfg = deepcopy(values)
     ensure_nonsecret(cfg)
-    for key in ('fmb_enabled', 'fx_enabled', 'naver_enabled'):
+    for key in ('fmb_enabled', 'fx_enabled', 'naver_enabled','fdr_enabled'):
         if key in cfg and type(cfg[key]) is not bool:
             raise ValueError(key + ': 사용 여부는 참/거짓이어야 합니다.')
     if action in ('collect', 'export', 'reports', 'snapshot', 'history', 'ecm_preview', 'ecm_apply', 'save_settings'):
@@ -75,7 +76,18 @@ def validate(values, action):
         if not 0 <= days <= 3650:
             raise ValueError('수집 기간은 0~3650일로 입력하세요.')
         cfg['lookback_days'] = days
-    if action == 'collect' and not any(cfg.get(k, True) for k in ('fmb_enabled', 'fx_enabled', 'naver_enabled')):
+    if action in ('save_settings','collect'):
+        from fdr_provider import instruments
+        codes=cfg.get('fdr_stock_codes',['005490'])
+        if isinstance(codes,str):codes=[s.strip() for s in codes.split(',') if s.strip()]
+        if not isinstance(codes,list):raise ValueError('FDR 관심종목은 코드 목록이어야 합니다.')
+        instruments(codes)
+        cfg['fdr_stock_codes']=list(dict.fromkeys(codes))
+        value=cfg.get('fdr_timeout',20)
+        if isinstance(value,bool) or not isinstance(value,(int,float)) or not 1<=value<=120:
+            raise ValueError('FDR 시간 제한은 1~120초입니다.')
+        cfg['fdr_timeout']=value
+    if action == 'collect' and not (any(cfg.get(k, True) for k in ('fmb_enabled', 'fx_enabled', 'naver_enabled')) or cfg.get('fdr_enabled',False)):
         raise ValueError('수집할 출처를 하나 이상 선택하세요.')
     if action == 'connect' or (action == 'collect' and cfg.get('fmb_enabled', True)):
         from FastmarketsCollector_v3_4 import verify_workspace_url
