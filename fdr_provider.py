@@ -104,8 +104,8 @@ def has_expected_pair(spec,rows,captured_at):
 
 
 def fetch_history(spec,start,end,cancelled,timeout):
-    command=[sys.executable,str(Path(__file__).resolve()),'--fetch',spec.code,start,end]
-    process=subprocess.Popen(command,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+    command=[sys.executable,'-X','utf8',str(Path(__file__).resolve()),'--fetch',spec.code,start,end]
+    process=subprocess.Popen(command,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,encoding='utf-8',errors='replace')
     deadline=time.monotonic()+timeout
     try:
         while True:
@@ -222,7 +222,8 @@ def collect_and_save(db_path,cancelled,logger=print,*,stock_codes=('005490',),ti
             logger('[FDR] '+code+': '+status)
     if result['status']!='cancelled':
         result['warnings'].append('KR10Y: FDR 검증된 일별 지원 경로 없음; 한국10년은 미지원으로 유지')
-        result['status']='partial'
+        states=[r['status'] for r in result['instruments'].values()]
+        result['status']='failed' if states and all(s=='failed' for s in states) else 'partial'
     result['elapsed']=round(time.monotonic()-started,3)
     return result
 

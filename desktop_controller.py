@@ -59,7 +59,10 @@ class CollectorService:
         self._cancel.clear()
         self._redactions = [str(payload.get(k) or '') for k in ('password',)]
         try:
-            cfg = validate(settings if settings is not None else self.settings, action)
+            values=deepcopy(settings if settings is not None else self.settings)
+            if action=='collect_public':
+                values.update(fmb_enabled=False,fx_enabled=False,naver_enabled=False,fdr_enabled=True)
+            cfg = validate(values, 'collect' if action=='collect_public' else action)
             if cfg.get('_settings_warning') and action not in ('save_settings','snapshot','history','diagnose','schedule_status'):
                 return self._result('needs_action', cfg['_settings_warning'] + ' 설정을 확인하고 저장하세요.')
             if action in ('collect','connect','diagnose'):
@@ -94,6 +97,9 @@ class CollectorService:
             context = build_context(folder, workspace_id=active)
             data = dict(tables=context.tables, as_of=context.as_of,
                         snapshot_id=context.snapshot_id, warnings=list(context.warnings))
+            from metal_dashboard import dashboard_data
+            data['metals']=dashboard_data(context)
+            data['source_dates']=dict(context.source_dates)
             return self._result('partial' if context.warnings else 'complete',
                                 '저장된 자료를 읽었습니다.',data,context.warnings)
         if action == 'history':
@@ -118,10 +124,10 @@ class CollectorService:
             return self._result('complete','저장된 계정을 삭제했습니다.')
         if action == 'diagnose':
             return self._diagnose(cfg)
-        if action in ('collect','export','reports'):
+        if action in ('collect','collect_public','export','reports'):
             import pipeline_v37
             self._pending = None
-            if action == 'collect':
+            if action in ('collect','collect_public'):
                 raw = pipeline_v37.run_collection(cfg, self.browser, self._cancel, self._log)
                 diag = raw.get('diag', {})
                 state = 'cancelled' if raw.get('cancelled') else diag.get('status','failed')
@@ -133,7 +139,7 @@ class CollectorService:
                 raw = pipeline_v37.export_only(clean)
                 state = raw.get('status','failed')
                 warnings = raw.get('warnings', [])
-            label = {'collect':'수집·누적','export':'Excel·보고서 출력','reports':'선택 기간 보고서'}[action]
+            label = {'collect':'수집·누적','collect_public':'공개 종가 수집','export':'Excel·보고서 출력','reports':'선택 기간 보고서'}[action]
             message = label + ' ' + {'complete':'완료','partial':'부분 완료','failed':'실패','cancelled':'중단'}.get(state,'실패')
             if warnings:
                 message += ': ' + str(warnings[0])

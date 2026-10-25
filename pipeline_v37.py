@@ -98,6 +98,8 @@ def run_collection(settings,browser,cancelled,logger=print):
             status='failed'
         seconds=round(time.monotonic()-tick,3)
         diag['stages'][name]={'status':status,'elapsed':seconds}
+        if isinstance(result,dict):
+            diag['stages'][name].update({key:result[key] for key in ('error','message','warnings','missing') if result.get(key)})
         diag['warnings'].extend(result.get('warnings',[]) if isinstance(result,dict) else [])
         try:storage_runtime.save_stage(db,run_id,name,status,seconds,result)
         except Exception as exc:diag['warnings'].append('실행 단계 기록 실패: '+str(exc))

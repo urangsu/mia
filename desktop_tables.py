@@ -43,6 +43,20 @@ def report_summary(action_label, state_label, feedback, paths):
     return '\n'.join(lines)
 
 
+def collection_issues(diag):
+    lines=[]
+    for stage,detail in (diag.get('stages') or {}).items():
+        if not isinstance(detail,dict) or detail.get('status') not in ('failed','partial','needs_action'):continue
+        reason=detail.get('error') or detail.get('message') or ''
+        extras=list(map(str,detail.get('warnings') or []))
+        if detail.get('missing'):extras.insert(0,'이력 부족: '+', '.join(detail['missing']))
+        text=' / '.join([str(reason)]+extras).strip(' /') or '실행 기록에서 세부 사유를 확인하세요.'
+        lines.append(STAGE_TEXT.get(stage,stage)+' · '+STATUS_TEXT.get(detail['status'],detail['status'])+' — '+text[:420])
+    if not lines and diag.get('status')=='failed':
+        lines.append('수집 실패 — '+' / '.join(map(str,diag.get('warnings') or ['실행 기록과 연결 진단을 확인하세요.']))[:420])
+    return '\n'.join(lines)
+
+
 def existing_output_paths(data):
     """Run on the service worker: network shares must not stall the UI thread."""
     found = []
@@ -230,6 +244,8 @@ class SnapshotSummary(QWidget):
                 detail += f' · 이력 부족 {sum("missing_history" in r for r in rows)}개'
             self.cards[index].setText(f'{title}  {len(confirmed)}개\n{detail}')
         rows = list(tables.get('보고용_금속시세', []))[1:]
-        selected = [r for r in rows if str(r[0]) in symbols]
+        headers=list(tables.get('보고용_금속시세', [[]])[0]) if tables.get('보고용_금속시세') else []
+        code_index=headers.index('코드') if '코드' in headers else 0
+        selected = [r for r in rows if str(r[code_index]) in symbols]
         text = '   /   '.join(f'{r[0]}  {r[2] if r[2] is not None else "미확인"} {r[3]} · {r[1] or "기준일 없음"}' for r in selected[:4] if len(r) >= 4)
         self.representatives.setText('대표 금속 · ' + (text or '선택 종목의 저장 자료 없음' if symbols else '설정에서 표시할 종목 코드를 지정하세요.'))
