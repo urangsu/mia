@@ -10,6 +10,14 @@ CAPTURE='2026-10-22T08:30:00+09:00'
 
 
 class PublicReportingTests(unittest.TestCase):
+    def test_stock_percent_uses_same_six_decimal_contract_as_market_table(self):
+        import fdr_provider,report_model,FastmarketsCollector_v3_4 as core
+        with tempfile.TemporaryDirectory() as t:
+            fdr_provider.collect_and_save(core.path_bundle(Path(t))['db'],lambda:False,lambda _:None,
+                captured_at=CAPTURE,fetcher=lambda *a:[dict(date='2026-10-20',close='143'),dict(date='2026-10-21',close='144')])
+            c=report_model.build_context(t,captured_at=CAPTURE)
+            self.assertEqual(c.tables['보고용_주가'][1][7],round(100/143,6))
+
     def fixture(self,folder,missing=False):
         import FastmarketsCollector_v3_4 as core
         import fdr_provider

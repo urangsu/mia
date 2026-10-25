@@ -196,14 +196,16 @@ def build_context(folder,start=None,end=None,series=None,*,synthetic=False,works
         result={}
         for r in sorted(rows,key=lambda r:(r['market_date'],r['captured_at'])):result[r[key]]=r
         return list(result.values())
-    metals=[('종목','고시일','Mid','단위','구분','출처')]
+    from series_mapping import product_info
+    metals=[('품목명','고시일','Mid','단위','구분','출처','코드','그룹','원본 조건')]
     identities={}
     for p in prices:
         if p.price_mode not in {'Actual','Forecast','Unspecified'} or p.period_label:continue
         key=f'FMB|{p.symbol}|{p.unit}|{p.price_mode}|MID'
         identities.setdefault(key,p)
     for key,p in sorted(identities.items()):
-        metals.append((p.symbol,p.date,records.get(p.date,{}).get(key),p.unit,p.price_mode,p.source))
+        product=product_info(p.symbol,p.description,p.unit,p.price_mode)
+        metals.append((product['name'],p.date,records.get(p.date,{}).get(key),p.unit,p.price_mode,p.source,p.symbol,product['group'],product['conditions']))
     fx=[('통화','고시일','매매기준율','전일대비','단위','출처')]
     latest_fx={}
     for q in sorted(quotes,key=lambda q:q.quote_date):
@@ -252,7 +254,8 @@ def build_context(folder,start=None,end=None,series=None,*,synthetic=False,works
     tables=dict(zip(REPORT_NAMES,(metals,fx,market,raw_cap,cap,[('구분','종목','시장·고시일','수치','단위','상태','출처')])))
     stocks=[('코드','종목명','시장일','수치','비교일','비교종가','전일대비','등락률(%)','단위','상태','출처')]
     for r in public['stocks']:
-        stocks.append((r['instrument_id'],r['label'],r['previous_date'],_number(r['previous_close']),r['prior_date'],_number(r['prior_close']),_number(r['change']),_number(r['pct']),r['unit'],r['status'],r['source_url']))
+        pct=_number(r['pct'])
+        stocks.append((r['instrument_id'],r['label'],r['previous_date'],_number(r['previous_close']),r['prior_date'],_number(r['prior_close']),_number(r['change']),round(pct,6) if pct is not None else None,r['unit'],r['status'],r['source_url']))
     tables['보고용_주가']=stocks
     public_raw=[r for r in raw.get('fdr_observations',[]) if dated(r,'market_date') and chosen(r['instrument_id'],f"FDR|{r['instrument_id']}|{r['unit']}|Actual|MID")]
     if public_raw:
