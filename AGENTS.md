@@ -29,7 +29,9 @@ Both scripts use a repository-local `.venv`; no API keys or user profiles are ne
 
 ## Working method
 
-Reproduce each defect, add a failing test, make the smallest justified fix, rerun targeted and full regression. Keep original data and unrelated work intact. UI writes happen only on the main Tk thread; browser and COM shared resources must retain exclusive ownership. Do not remove verification to improve speed.
+Reproduce each defect, add a failing test, make the smallest justified fix, rerun targeted and full regression. Keep original data and unrelated work intact. UI writes happen only on the owning Qt/Tk main thread; browser and COM shared resources must retain exclusive ownership. Do not remove verification to improve speed. Do not run live collection alongside tests that use the shared browser lock.
+
+Metal dashboard: source description defines presentation, not a cross-provider mapping. Keep source/unit/mode/view identities and raw provenance; shared validated values can veto a raw view but never fill its missing Mid. Chart painting must be linear and hover logarithmic in history length. Research-link collection remains plan-only until explicitly implemented and verified; no PDF/text collection or auto-summary. Source bundles must be built from a committed revision using scripts/build_source_bundle.py, restored/hash-verified and tested; old ONEFILE/PART snapshots are not current source.
 
 Parallel work, if explicitly used for this plan, must have separate file ownership and final integration review. Do not message other user-owned tasks or create unrelated tasks without user authorization.
 
