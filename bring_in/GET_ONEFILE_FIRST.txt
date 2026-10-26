@@ -1,3 +1,8 @@
+처음 반입/설치하시면 MIA_COMPANY_SETUP_GUIDE_KO.txt를 먼저 읽으세요.
+가져갈 파일, %APPDATA% 아래 매크로 경로, PowerShell 명령, 전용 가상환경 실행,
+공용 설정/운영 파일 주의사항과 예약 전환을 한 TXT에 정리했습니다.
+안내 TXT는 설명서이며 프로그램 소스 TXT와는 별도입니다.
+
 2026-10-25 개선판은 MIA_SOURCE_CURRENT.txt + RESTORE_LATEST_SOURCE.py를 사용하세요.
 기존 LZW ONEFILE/PART와 호환되지 않으므로 섞지 마세요.
 py RESTORE_LATEST_SOURCE.py --verify-only

@@ -1,0 +1,366 @@
+MIA 회사 반입 · 복원 · 설치 · 실행 안내 — 이 파일 하나로 보기
+작성/저장소 확인: 2026-10-26 KST
+
+============================================================
+0. 결론: 어디에 두고, 무엇을 가져가나?
+============================================================
+
+사용 중인 회사 경로:
+%APPDATA%\Microsoft\AddIns\vsc\매크로
+
+이 경로 아래 새 하위 폴더를 만들어 사용하는 것은 코드상 가능합니다.
+한글 경로 자체를 금지하는 로직은 없습니다. 다만 회사의 폴더 실행 권한,
+보안 프로그램, Python 패키지 설치/긴 경로 제한까지 이 Mac에서 확인한 것은
+아닙니다. AddIns 밑에 두어도 Excel 추가기능으로 자동 설치되는 것은 아닙니다.
+Python 프로그램으로 실행해야 합니다. 관리자 권한/보안 우회는 필요하지 않습니다.
+
+아래 폴더는 지우거나 덮어쓰지 마세요.
+  MIA_Collector  : 기존 본 프로그램
+  MIA_DOM_V4     : 기존 DOM 확장
+  MIA_ONEFILE    : 과거 복원 키트
+
+새 반입 폴더:
+  매크로\MIA_UPDATE_20261025
+
+새 프로그램 폴더(직접 --output을 지정하여 복원):
+  매크로\MIA_Collector_20261025
+
+날짜 20261025는 이번 개선판의 구분명입니다.
+오늘 이 안내를 만들었다고 기존 복원본/가상환경을 다시 만들 필요는 없습니다.
+
+반입할 파일 — 필수 2개:
+  1) MIA_SOURCE_CURRENT.txt       : 전체 소스를 담은 데이터 TXT
+  2) RESTORE_LATEST_SOURCE.py     : 위 TXT 전용 복원 프로그램
+
+선택 파일:
+  3) RESTORE_LATEST_SOURCE.cmd    : 기본 경로 복원용 더블클릭 실행기
+  4) 이 안내 TXT                 : 회사에서 명령을 확인할 설명서
+
+중요: "단일 TXT"란 전체 소스를 한 TXT에 담았다는 뜻입니다.
+TXT를 더블클릭하는 것만으로 프로그램이 설치되지는 않습니다.
+복원하려면 전용 PY도 필요합니다. 이 안내 TXT 자체에는 프로그램 소스가 없습니다.
+
+사용하지 않을 구버전:
+  MIA_COLLECTOR_ONEFILE.txt
+  MIA_COLLECTOR_PART_01.txt ~ PART_11.txt
+  RESTORE_MIA_FROM_TXT.py
+새 TXT와 과거 ONEFILE/PART용 복원기를 섞지 마세요.
+
+============================================================
+1. GitHub에서 받을 위치와 버전
+============================================================
+
+저장소: urangsu/mia
+브랜치: main
+폴더: bring_in
+폴더 주소:
+https://github.com/urangsu/mia/tree/main/bring_in
+
+개별 파일 주소:
+https://github.com/urangsu/mia/blob/main/bring_in/MIA_SOURCE_CURRENT.txt
+https://github.com/urangsu/mia/blob/main/bring_in/RESTORE_LATEST_SOURCE.py
+https://github.com/urangsu/mia/blob/main/bring_in/RESTORE_LATEST_SOURCE.cmd
+
+각 파일의 Raw/원본 다운로드를 이용하세요. 웹페이지 자체를 다른 이름으로 저장해
+HTML이 들어가면 안 됩니다. 큰 TXT를 Word/메신저에서 편집·재조합하지 마세요.
+회사에서 허용한 반입 수단만 사용하세요. 차단 우회 명령은 필요하지 않습니다.
+
+2026-10-26에 확인한 main:
+9680e86157c09ba479ad1091e6bf7994bed1b541 (PR #6 병합)
+
+이번에 만든 TXT의 실제 소스 스냅샷:
+1efe7ec24d76e8a00fa9b983a490d7f9c2cb4d59 / 소스 131개
+
+둘의 해시가 다른 것은 정상입니다. TXT를 만들 소스를 먼저 커밋하고,
+생성된 TXT를 추가한 뒤 main에 병합했기 때문입니다.
+이번 TXT의 131개 소스와 위 main의 대응 파일이 일치함을 확인했습니다.
+이 TXT는 고정 스냅샷이며, 미래 main 변경을 자동 반영하지 않습니다.
+
+이번 TXT 내부 ZIP SHA-256:
+57b853842c5a06a8bad8c657e519e1e22d18585d0fe9e4e80bd4c4e0b7da6008
+이 값은 TXT 파일 자체의 SHA-256이 아닙니다. 복원기가 자동 검사합니다.
+해시는 손상 검증이지 발행자 인증 서명이 아닙니다. 신뢰하는 저장소에서 받으세요.
+
+============================================================
+2. PowerShell: 반입 폴더 준비
+============================================================
+
+명령은 일반 PowerShell 창에서 블록별로 실행합니다.
+복사할 때 제목/설명은 빼고 명령 줄만 복사하세요.
+관리자 PowerShell, 실행 정책 해제, Activate.ps1 실행은 필요하지 않습니다.
+
+---- 명령 시작 ----
+$root = Join-Path $env:APPDATA 'Microsoft\AddIns\vsc\매크로'
+$update = Join-Path $root 'MIA_UPDATE_20261025'
+$target = Join-Path $root 'MIA_Collector_20261025'
+
+Write-Host "회사 매크로 폴더: $root"
+if (-not (Test-Path -LiteralPath $root -PathType Container)) {
+    throw '회사 매크로 폴더가 없습니다. 계정/경로를 확인한 뒤 진행하세요.'
+}
+New-Item -ItemType Directory -Force -Path $update | Out-Null
+Set-Location -LiteralPath $update
+Get-ChildItem -Name
+---- 명령 끝 ----
+
+현재 로그인 계정에서는 $root가 위 0번의 경로로 표시되어야 합니다.
+위 명령은 폴더만 준비합니다. GitHub 파일을 자동 다운로드하지 않습니다.
+이제 필수 TXT/PY와 선택 CMD를 MIA_UPDATE_20261025에 넣으세요.
+파일 이름이 .txt.txt / .py.txt로 이중 저장되지 않았는지 확인하세요.
+
+---- 명령 시작 ----
+Get-Item -LiteralPath '.\MIA_SOURCE_CURRENT.txt', '.\RESTORE_LATEST_SOURCE.py' |
+    Select-Object Name, Length
+py -3 --version
+py -3 -c "import sys; assert sys.version_info >= (3,10), 'Python 3.10+ required'; print(sys.executable)"
+if ($LASTEXITCODE -ne 0) { throw '회사 승인 Python 3.10 이상을 먼저 확인하세요.' }
+---- 명령 끝 ----
+
+py가 없거나 버전이 맞지 않으면 회사에서 승인한 Python 설치/사용 방법을 확인합니다.
+필수 라이브러리는 복원 후 설치합니다. 복원기 자체는 Python 표준 라이브러리만 씁니다.
+
+============================================================
+3. TXT 검증 후 원하는 회사 경로에 복원
+============================================================
+
+위 PowerShell 창을 계속 쓰는 경우:
+
+---- 명령 시작 ----
+Set-Location -LiteralPath $update
+py -3 .\RESTORE_LATEST_SOURCE.py --verify-only
+if ($LASTEXITCODE -ne 0) { throw 'TXT 검증 실패. 설치를 진행하지 마세요.' }
+---- 명령 끝 ----
+
+이번 파일의 기대 결과:
+  검증 성공: 1efe7ec24d76e8a00fa9b983a490d7f9c2cb4d59 131 files
+
+검증에 통과했으면 새 폴더로 복원:
+
+---- 명령 시작 ----
+if (Test-Path -LiteralPath $target) {
+    throw '복원 대상이 이미 있습니다. 삭제하지 말고 기존 복원본을 쓰거나 새 폴더명을 지정하세요.'
+}
+py -3 .\RESTORE_LATEST_SOURCE.py --output "$target"
+if ($LASTEXITCODE -ne 0) { throw '복원 실패. 오류를 확인하세요.' }
+Get-Item -LiteralPath (Join-Path $target 'FastmarketsCollector_v3_7.py'),
+    (Join-Path $target 'requirements-desktop.txt')
+---- 명령 끝 ----
+
+기대 복원 위치:
+%APPDATA%\Microsoft\AddIns\vsc\매크로\MIA_Collector_20261025
+
+이미 MIA_Collector_20261025가 있다면:
+  - 같은 버전 복원이 끝난 경우에는 4~5번 설치/실행 단계로 넘어갑니다.
+  - 별도 복원이 필요하면 $target을 MIA_Collector_20261025_02 등 새 이름으로
+    바꿉니다. 이후 실행 명령도 같은 새 이름을 사용하세요.
+  - 기존 폴더/DB/Excel을 삭제하거나 강제 덮어쓰지 마세요.
+
+주의: RESTORE_LATEST_SOURCE.cmd를 그냥 더블클릭하거나 --output 없이 복원하면
+기본 위치는 아래입니다. 위 매크로 폴더로 자동 복원되지 않습니다.
+  %LOCALAPPDATA%\MIA_Sources\MIA_1efe7ec24d76
+따라서 말씀하신 회사 위치에 둘 때는 위의 --output 명령을 사용하세요.
+
+============================================================
+4. 전용 가상환경 설치 — 처음 한 번
+============================================================
+
+---- 명령 시작 ----
+Set-Location -LiteralPath $target
+py -3 -m venv .venv
+if ($LASTEXITCODE -ne 0) { throw '가상환경 생성 실패. 경로/권한/Python 버전을 확인하세요.' }
+$python = Join-Path $target '.venv\Scripts\python.exe'
+& $python -m pip install -r .\requirements-desktop.txt
+if ($LASTEXITCODE -ne 0) { throw '패키지 설치 실패. 회사 승인 저장소/네트워크를 확인하세요.' }
+& $python -m pip check
+if ($LASTEXITCODE -ne 0) { throw '패키지 의존성 충돌을 먼저 해결하세요.' }
+---- 명령 끝 ----
+
+기존 Python 패키지를 덮어쓰지 않고 새 폴더의 .venv 안에 설치합니다.
+인터넷이 차단된 회사 PC라면 소스 TXT만으로 라이브러리까지 설치되지는 않습니다.
+사내 승인 패키지 저장소 또는 해당 Windows/Python에 맞는 승인된 wheel이 별도로
+필요합니다. 회사 보안을 우회하거나 TLS 인증서 검증을 끄지 마세요.
+한글/긴 경로 관련 오류가 실제 발생하면 그 오류를 확인한 뒤 회사 승인 경로를
+정해야 합니다. 임의로 보안 설정을 바꾸거나 기존 폴더를 옮기지 마세요.
+
+============================================================
+5. 첫 실행 전: 설정이 공용이라는 점이 중요합니다
+============================================================
+
+프로그램 소스 폴더와 가상환경은 새로 만들었지만, 현재 설정/전용 Chrome 프로필은
+사용자 계정 기준 공용 위치를 사용합니다.
+
+설정 파일:
+  %LOCALAPPDATA%\FastmarketsCollector\config.json
+전용 Fastmarkets Chrome 프로필:
+  %LOCALAPPDATA%\FastmarketsCollector\ChromeProfile_9444
+설정이 없을 때의 기본 데이터 폴더:
+  사용자 홈\Documents\FastmarketsCollector
+  (회사에서 실제 문서 폴더를 다른 곳으로 리디렉션했다면 원하는 경로를 직접 지정)
+
+즉, 새 폴더 설치 = 운영 데이터/프로필까지 완전 격리라는 뜻이 아닙니다.
+이전 설정의 data_dir, workbook_path, report_dir가 그대로 적용될 수 있습니다.
+설정을 저장하면 구버전 실행에도 같은 설정이 적용될 수 있습니다.
+테스트 중 구버전 수집기/기존 예약을 동시에 실행하지 마세요. 회사 예약의 활성
+여부를 확인하고 필요한 중단은 담당자와 조율하세요.
+
+원한다면 실행 전 현재 설정만 로컬 백업하세요(자동 복원/설정 변경 아님).
+이 백업에는 회사 경로가 있을 수 있으므로 공개 Git/외부 채팅에 올리지 마세요.
+
+---- 명령 시작 ----
+$config = Join-Path $env:LOCALAPPDATA 'FastmarketsCollector\config.json'
+if (Test-Path -LiteralPath $config -PathType Leaf) {
+    $backup = Join-Path $update ('config_before_update_' + (Get-Date -Format 'yyyyMMdd_HHmmss') + '.json')
+    Copy-Item -LiteralPath $config -Destination $backup -ErrorAction Stop
+    Write-Host "설정 사본 저장: $backup"
+}
+& $python .\FastmarketsCollector_v3_7.py
+---- 명령 끝 ----
+
+GUI에서 수집 버튼을 누르기 전에 확인:
+  1) 데이터 폴더: 시험용 새 폴더 또는 승인된 DB 사본
+  2) 누적 Excel: 운영 원본이 아닌 시험용 사본
+  3) 보고서 폴더: 시험용 별도 경로
+  4) 수집할 출처: FMB/환율/NAVER DOM/FDR를 구별
+  5) Fastmarkets 작업공간과 9444 연결 상태
+
+프로그램의 '공개 종가만 수집'은 이번 실행만 FMB/환율/NAVER DOM을 끄는 버튼이며
+Fastmarkets 구독 금속가격 수집을 대신하지 않습니다.
+ECM 적용/자동 실행 등록은 첫 검증과 별도 단계입니다. 바로 승인하지 마세요.
+
+============================================================
+6. 다음번 실행 — 새 PowerShell 창에서도 이 블록만 사용
+============================================================
+
+---- 명령 시작 ----
+$program = Join-Path $env:APPDATA 'Microsoft\AddIns\vsc\매크로\MIA_Collector_20261025'
+$python = Join-Path $program '.venv\Scripts\python.exe'
+if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
+    throw '전용 Python이 없습니다. 실제 복원 폴더명과 4번 설치 단계를 확인하세요.'
+}
+Set-Location -LiteralPath $program
+& $python .\FastmarketsCollector_v3_7.py
+---- 명령 끝 ----
+
+복원 폴더명을 _02 등으로 바꿨다면 위 $program도 같은 이름으로 바꿔야 합니다.
+매번 복원하거나 라이브러리를 다시 설치할 필요는 없습니다.
+
+중요: 현재 RUN_GUI.cmd는 'py -u ...'로 기본 Python을 실행합니다.
+위 .venv에 설치했다면 RUN_GUI.cmd 더블클릭으로 같은 환경이 선택된다고 보장할 수
+없습니다. 이 안내에서는 위의 .venv Python 직접 실행을 정식 방법으로 사용합니다.
+기존 CMD를 이번 안내 작업에서 수정하지 않았습니다.
+
+============================================================
+7. 공개 종가만 별도 시험하는 선택 명령
+============================================================
+
+이 명령은 실제 공개 HTTP 요청 및 시험 폴더 DB/Excel/보고서 쓰기를 수행합니다.
+회사에서 허용한 네트워크에서만 실행하세요. Fastmarkets·SMBS·NAVER DOM 수집과
+ECM은 실행하지 않습니다. 새 PowerShell 창에서도 실행 가능한 블록입니다.
+
+---- 명령 시작 ----
+$root = Join-Path $env:APPDATA 'Microsoft\AddIns\vsc\매크로'
+$program = Join-Path $root 'MIA_Collector_20261025'
+$python = Join-Path $program '.venv\Scripts\python.exe'
+$testData = Join-Path $root 'MIA_UPDATE_20261025\PUBLIC_TEST'
+$testExcel = Join-Path $testData 'public.xlsx'
+$testReports = Join-Path $testData 'reports'
+Set-Location -LiteralPath $program
+& $python .\FastmarketsCollector_v3_7.py --once --public-only --data-dir "$testData" --workbook "$testExcel" --report-dir "$testReports"
+Write-Host "실행 종료 코드: $LASTEXITCODE"
+---- 명령 끝 ----
+
+현재 한국10년(KR10Y)이 미지원이므로 다른 공개 종가를 저장했어도 종료 코드 2 /
+partial이 나올 수 있습니다. 이것만으로 ChromeDriver 실패라고 판단하지 않습니다.
+출처별 complete/partial/failed와 실제 생성 파일을 확인하세요.
+금·WTI는 연속선물이며 현물/공식 정산가와 다릅니다.
+
+============================================================
+8. '수집 실패'일 때 모을 최소 정보
+============================================================
+
+GUI 하단/실행 기록에서 먼저 어느 출처·단계가 실패했는지 확인하세요.
+  FMB: Fastmarkets Chrome 9444 / Driver / 로그인 / 작업공간 / DOM
+  FDR: 공개 HTTP / 회사 프록시·TLS·인터넷 / 원천 이력 부족
+  Excel/보고서: 파일 잠김·권한·출력 경로 / 회사 COM·보안
+
+새 PowerShell 창에서도 실행 가능한 진단:
+
+---- 명령 시작 ----
+$root = Join-Path $env:APPDATA 'Microsoft\AddIns\vsc\매크로'
+$program = Join-Path $root 'MIA_Collector_20261025'
+$python = Join-Path $program '.venv\Scripts\python.exe'
+Set-Location -LiteralPath $program
+& $python .\diagnose_windows.py --driver-check
+---- 명령 끝 ----
+
+위 도구는 기존 Fastmarkets 9444만 확인하며 9222/9337은 조회하지 않습니다.
+기존 9444가 검증되면 Driver를 연결해 확인하지만 탭 이동/닫기/새 브라우저 실행은
+하지 않습니다. 'not_running'은 9444가 없다는 뜻이며 로그인 성공이 아닙니다.
+보호 검사를 끄거나 다른 Edge/Chrome 전체를 종료하는 명령은 쓰지 마세요.
+
+다음 자료를 비밀정보 제거 후 확인하면 원인 진단에 도움이 됩니다.
+  - 화면에 나온 실제 마지막 오류 문구
+  - 설정의 데이터 폴더에 있는 collector.log, last_diagnostic.json
+  - 위 diagnose_windows.py --driver-check 결과
+  - 사용한 소스 커밋/실행 폴더/전용 Python 버전
+
+쿠키·토큰·비밀번호·전체 프로필·회사 원문 DB/Excel을 보내지 마세요.
+공개 GitHub 이슈에 회사 경로/자료를 올리지 마세요.
+
+============================================================
+9. 선택: 검증이 끝난 뒤 오전 08:30 예약
+============================================================
+
+주의: 기존과 새 프로그램은 'FastmarketsCollectorDaily'라는 같은 작업명을 씁니다.
+새 예약 등록은 기존 작업을 대체할 수 있습니다. 테스트 중에는 등록하지 마세요.
+어떤 프로그램/경로가 현재 예약되어 있는지 먼저 조회하고, 운영 담당자 확인 후
+새 경로로 전환할 때만 등록하세요. 저장된 설정/운영 DB·Excel 경로도 먼저 확인합니다.
+
+조회만 하는 명령:
+
+---- 명령 시작 ----
+$program = Join-Path $env:APPDATA 'Microsoft\AddIns\vsc\매크로\MIA_Collector_20261025'
+$python = Join-Path $program '.venv\Scripts\python.exe'
+Set-Location -LiteralPath $program
+& $python .\FastmarketsCollector_v3_7.py --schedule-status
+---- 명령 끝 ----
+
+운영 전환을 결정한 경우에만 별도로 실행:
+
+---- 명령 시작 ----
+& $python .\FastmarketsCollector_v3_7.py --schedule 08:30
+& $python .\FastmarketsCollector_v3_7.py --schedule-status
+---- 명령 끝 ----
+
+직전 조회 블록과 같은 PowerShell 창에서 실행하세요.
+전용 Python으로 등록하면 예약에도 그 Python 경로가 사용됩니다.
+Windows 표준 시간대는 한국시간, 사용자 로그인·네트워크·구독/MFA 상태가 필요합니다.
+등록 후 폴더나 .venv를 옮기면 안 됩니다. 실제 예약 기동/결과 파일을 별도 확인하세요.
+전원이 꺼진 PC를 켜주는 기능은 아니며 ECM 승인 쓰기는 자동 수행하지 않습니다.
+
+============================================================
+10. 개선판의 범위 / 아직 확인되지 않은 것
+============================================================
+
+구현된 범위:
+  - 금속 중심 그룹/품목명·조건·코드 구분
+  - 저장 시세의 기간 선택, 단위·뷰별 차트와 표
+  - 자료 기준 기본 접힘, 중요 경고 유지
+  - 수집 출처·단계별 실패 이유, 공개 전용 복구 경로
+  - 같은 스냅샷의 Excel/HTML/편집 가능한 PPTX
+
+아직 완료됐다고 해석하면 안 되는 범위:
+  - LME/SMM/GFEX 실제 가격 자동 수집: 미지원/근거 미확보
+  - 회사 Fastmarkets 전체 품목/실제 DOM·보안 Excel/ECM 서버/예약 실기동 인수
+  - 새 니켈·리튬 리포트 자동 감시/본문·PDF 수집: 링크 전용 계획만 있음
+
+기존 MIA_DOM_V4 설치본은 이번 본 프로그램 복원으로 자동 업데이트되지 않습니다.
+기존 확장과 폴더를 그대로 유지하세요.
+
+검증 경계:
+  2026-10-25에 원격 main/복원본의 314개 테스트 통과를 확인한 기록이 있습니다.
+  2026-10-26에는 main 커밋·실제 복원 옵션·실행/설정/예약 경로를 코드로 재확인했습니다.
+  아래 회사 PowerShell 명령을 실제 회사 Windows에서 실행한 것은 아닙니다.
+  복원 성공과 실제 회사 수집·Excel·ECM 성공은 서로 다른 검증입니다.
+
+이 안내는 설명 파일이며 자동 실행/보안 설정 변경/기존 파일 삭제를 하지 않습니다.
