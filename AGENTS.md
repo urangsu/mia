@@ -25,6 +25,7 @@ Both scripts use a repository-local `.venv`; no API keys or user profiles are ne
 - The 08:30 Windows schedule requires a logged-in interactive user; cloud environment setup is not Windows scheduling.
 - Do not add paid/private price APIs, news, AI commentary, mail delivery or unattended ECM approval.
 - Approved public-close path: FinanceDataReader HTTP in an owned cancellable child, with exchange_calendars expected-session checks. This does not authorize private Fastmarkets APIs, KRX login bypass or browser/session changes. Preserve raw revisions/quarantine; never substitute older or adjusted closes for missing expected dates. See docs/FDR_CALENDARS_GUIDE.md.
+- Default public source is now NAVER's source-bound visible daily tables (no account). FDR is optional. Keep live capitalization capture dates separate from source market dates. Stocks/indices/caps belong to reports, not new operating workbook/ECM columns. See docs/METAL_WORKBOOK_LAYOUT.md and docs/COLLECTION_INSTALL_REPAIR_20261027.md.
 - Read DESIGN_REFERENCE.md before UI/report changes. No proprietary brand assets/fonts.
 
 ## Working method

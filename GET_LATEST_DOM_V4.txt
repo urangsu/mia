@@ -16,8 +16,9 @@ py -3 .\RESTORE_MIA_FROM_TXT.py --project dom
 복원 경로: %LOCALAPPDATA%\MIA_Text_Restored\MIA_DOM_V4_<해시>
 복원 후 chrome://extensions 의 '압축해제된 확장 프로그램 로드'로 추가하세요.
 
-Collector도 함께 복원하려면 Github bring_in/MIA_COLLECTOR_PART_01.txt~11.txt를
-동일한 폴더에 배치한 뒤 --project both 사용.
+Collector의 현재 소스는 별도 MIA_SOURCE_CURRENT.txt 복원 방식을 사용합니다.
+GET_LATEST_COLLECTOR.txt를 보세요. 구 PART 방식과 섞지 않습니다.
+과거 공통 복원기는 bring_in/archive/legacy에 보관했습니다.
 
 원본 ZIP SHA256: 66d97db7a663d514f31fbdbef5c6f62913d5c8b3feff1b4f48a0a9b1da525888
 누락/손상 파트는 해시 검증으로 차단합니다. 기존 앱·업무 DB/Excel/ECM/예약 변경 없음.
