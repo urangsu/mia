@@ -8,7 +8,6 @@ import base64
 from hashlib import sha256
 import io
 import json
-import os
 from pathlib import Path,PurePosixPath
 import re
 import tempfile
@@ -26,7 +25,7 @@ def safe_path(name):
 
 
 def restore_source(txt,destination=None,*,verify_only=False):
-    txt=Path(txt)
+    txt=Path(txt).resolve()
     if txt.stat().st_size>30*1024*1024:raise ValueError('TXT 크기 제한 초과')
     lines=txt.read_text(encoding='utf-8').splitlines()
     if len(lines)!=2:raise ValueError('단일 TXT 형식 불일치; 예전 PART/ONEFILE 파일과 섞지 마세요.')
@@ -53,10 +52,9 @@ def restore_source(txt,destination=None,*,verify_only=False):
         if any(sha256(data).hexdigest()!=manifest['files'][name] for name,data in files.items()):raise ValueError('개별 소스 SHA-256 불일치')
     if verify_only:return manifest
     if destination is None:
-        base=Path(os.environ.get('LOCALAPPDATA',str(Path.home()))) / 'MIA_Sources'
-        destination=base/('MIA_'+manifest['source_commit'][:12])
+        destination=txt.parent/'MIA_Collector_Update'
     destination=Path(destination).resolve()
-    if destination.exists():raise FileExistsError('기존 폴더를 덮어쓰지 않습니다: '+str(destination))
+    if destination.exists():raise FileExistsError('기존 폴더를 덮어쓰지 않습니다: '+str(destination)+' / 기존 복원본을 확인하거나 --output으로 다른 새 폴더를 지정하세요.')
     destination.parent.mkdir(parents=True,exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='.mia-source-',dir=destination.parent) as tmp:
         staged=Path(tmp)/'source';staged.mkdir()
