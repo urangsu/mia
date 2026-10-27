@@ -20,9 +20,16 @@ KST = timezone(timedelta(hours=9))
 ALLOWED_HOSTS = frozenset(('stock.naver.com', 'finance.naver.com'))
 INDICATORS = ('KOSPI', 'KOSDAQ', 'SP500', 'NASDAQ', 'US10Y', 'KR10Y', 'GOLD', 'WTI')
 PAGES = (
-    ('indicators', 'https://stock.naver.com/market'),
+    ('history:KOSPI', 'https://stock.naver.com/domestic/index/KOSPI/price'),
     ('equities', 'https://stock.naver.com/market/stock/kr/stocklist/capitalization'),
-    ('equities', 'https://finance.naver.com/item/main.naver?code=005490'),
+    ('history:005490', 'https://stock.naver.com/domestic/stock/005490/price'),
+    ('history:KOSDAQ', 'https://stock.naver.com/domestic/index/KOSDAQ/price'),
+    ('history:SP500', 'https://stock.naver.com/worldstock/index/.INX/price'),
+    ('history:NASDAQ', 'https://stock.naver.com/worldstock/index/.IXIC/price'),
+    ('history:US10Y', 'https://stock.naver.com/marketindex/bond/US10YT=RR/price'),
+    ('history:KR10Y', 'https://stock.naver.com/marketindex/bond/KR10YT=RR/price'),
+    ('history:GOLD', 'https://stock.naver.com/marketindex/metals/GCcv1/price'),
+    ('history:WTI', 'https://stock.naver.com/marketindex/energy/CLcv1/price'),
 )
 ALIASES = {
     'KOSPI': ('kospi', '코스피'), 'KOSDAQ': ('kosdaq', '코스닥'),
@@ -285,6 +292,12 @@ def parse_indicators(html, captured_at=None):
 def parse_capitalization(html, captured_at=None):
     captured, rows, warnings, seen = _stamp(captured_at), [], [], set()
     root = DOM(html).root
+    # Current NAVER renders semantic rows, not stock anchors. Identity comes
+    # from the row's official stock-logo URL; numeric cells use table headers.
+    # This is a live ranking: without a scoped source date it stays raw only.
+    live = _current_capitalization(root, captured)
+    if live is not None:
+        return live
     scope_verified=any(n.attrs.get('data-market-scope')=='KRX_ALL' or n.attrs.get('data-scope')=='KRX_ALL' or
                        (n.attrs.get('aria-selected')=='true' and n.text().strip() in ('전체','KRX 전체','전체시장','전체 시장')) for n in root.walk())
     if not scope_verified: warnings.append('KRX_ALL market scope not verified; ranking skipped (KOSPI-only is not KRX_ALL)')
@@ -343,6 +356,66 @@ def parse_capitalization(html, captured_at=None):
     return {'rows':rows, 'warnings':warnings}
 
 
+def _current_capitalization(root, captured):
+    tables = [n for n in root.walk() if n.tag == 'table' and
+              any(c.tag == 'caption' and c.text() == '국내 종목 주식 테이블' for c in n.walk())]
+    if not tables:
+        return None
+    all_selected = any(n.attrs.get('role') == 'radio' and n.attrs.get('aria-checked') == 'true'
+                       and n.text() == '전체' for n in root.walk())
+    krx = any((n.tag == 'button' or n.attrs.get('role') == 'button')
+              and any(c.text() == 'KRX' for c in n.walk()) and 'NXT' not in n.text()
+              for n in root.walk())
+    if not (all_selected and krx):
+        return {'rows': [], 'warnings': ['KRX_ALL market scope not verified; live ranking skipped']}
+    rows, warnings = [], []
+    for table in tables:
+        headers = [n.text().replace(' ', '') for n in table.walk() if n.tag == 'th']
+        if not {'종목명', '현재가', '전일대비', '시가총액'} <= set(headers):
+            continue
+        for tr in (n for n in table.walk() if n.tag == 'tr' and n.attrs.get('role') == 'button'):
+            cells = [n for n in tr.children if isinstance(n, Node) and n.tag == 'td']
+            fields = dict(zip(headers, cells))
+            if not {'종목명','현재가','전일대비','시가총액'} <= set(fields):
+                warnings.append('Partially hydrated ranking row skipped; required cells missing')
+                continue
+            first = fields.get('종목명')
+            if not first: continue
+            logo = next((n for n in first.walk() if n.tag == 'img' and
+                         re.fullmatch(r'https://ssl\.pstatic\.net/imgstock/fn/real/logo/stock/Stock\d{6}\.svg', n.attrs.get('src', ''))), None)
+            if logo is None:
+                warnings.append('Ranking row without verifiable stock identity skipped'); continue
+            code = re.search(r'Stock(\d{6})\.svg$', logo.attrs['src']).group(1)
+            rank_node = next((n for n in first.walk() if 'index' in n.attrs.get('class', '').split()), None)
+            rank = int(rank_node.text()) if rank_node and rank_node.text().isdigit() else None
+            if not (rank is not None and 1 <= rank <= 10) and code != '005490': continue
+            if code == '005490' and (rank is None or rank > 10): rank = None
+            cap_text = fields['시가총액'].text().replace(',', '').replace(' ', '')
+            # Reject unknown scales instead of taking the first number of 조+억.
+            cap_match = re.fullmatch(r'(?:(\d+(?:\.\d+)?)조)?(?:(\d+(?:\.\d+)?)억)?', cap_text)
+            cap = None
+            if cap_match and any(cap_match.groups()):
+                cap = str(Decimal(cap_match.group(1) or '0') * 10000 + Decimal(cap_match.group(2) or '0'))
+            change_cell = fields['전일대비']
+            pct_match = re.search(r'([+\-−]?\d+(?:\.\d+)?)\s*%', change_cell.text())
+            price = _node_number(fields['현재가'])
+            change = _node_number(change_cell)
+            pct = _number(pct_match.group(1)) if pct_match else None
+            if not _arith_ok(price, change, pct) or cap is None or Decimal(cap) <= 0:
+                warnings.append(code + ': invalid live price/change/capitalization; skipped'); continue
+            name = re.sub(r'\s*로고$', '', logo.attrs.get('alt', '')).strip()
+            rows.append(dict(stock_code=code, rank=rank, name=name, market_date=None,
+                             captured_at=captured, price=price, change=change, pct=pct,
+                             market_cap=cap, unit='원', currency='KRW', status='unverified',
+                             source_url=PAGES[1][1], raw_json=json.dumps({
+                                 'market_cap_unit': '억원', 'close_verified': False,
+                                 'market_scope': 'KRX_ALL', 'kind': 'live_ranking',
+                                 'text': tr.text()}, ensure_ascii=False)))
+    if rows: warnings.append('실시간 시총 원자료: 거래 기준일이 없어 확정종가/전일 시총으로 사용하지 않음')
+    else: warnings.append('No current capitalization rows recognized')
+    return {'rows': rows, 'warnings': warnings}
+
+
 def _allowed(url):
     parsed = urlparse(url)
     return parsed.scheme == 'https' and parsed.hostname in ALLOWED_HOSTS and not parsed.username and parsed.port in (None,443)
@@ -357,10 +430,15 @@ def collect(driver, cancelled, logger=print, force=False):
         original = driver.current_window_handle
         driver.switch_to.new_window('tab')
         owned = driver.current_window_handle
-        for kind, url in PAGES:
+        pages = list(PAGES)
+        for kind, url in pages:
             if cancelled(): result['status']='cancelled'; break
             if not _allowed(url): raise ValueError('Unapproved source URL')
-            driver.get(url)
+            try:
+                driver.get(url)
+            except Exception as exc:
+                result['warnings'].append(kind+': public page unavailable ('+type(exc).__name__+'): '+str(exc)[:180])
+                continue
             if not _allowed(driver.current_url): raise ValueError('NAVER redirect outside source allowlist')
             parsed = {'rows':[], 'warnings':[]}
             # Conditional DOM readiness polling, bounded to three seconds/page.
@@ -369,29 +447,56 @@ def collect(driver, cancelled, logger=print, force=False):
                 if cancelled(): result['status']='cancelled'; break
                 if not _allowed(driver.current_url): raise ValueError('NAVER late redirect outside source allowlist')
                 html = driver.page_source
-                parser = parse_indicators if kind=='indicators' else parse_capitalization
-                parsed = parser(html)
+                history = kind.startswith('history:')
+                if history:
+                    from naver_dom_history import parse_daily_history
+                    code = kind.split(':',1)[1]
+                    unit = '%' if code in ('US10Y','KR10Y') else 'USD/oz' if code=='GOLD' else 'USD/bbl' if code=='WTI' else None
+                    currency = 'USD' if code in ('GOLD','WTI') else None
+                    name=next((r.get('name') for r in result['equities'] if r['stock_code']==code and r.get('name')),
+                              'POSCO홀딩스' if code=='005490' else '')
+                    parsed = parse_daily_history(html,code,driver.current_url,equity=code.isdigit(),
+                                                 name=name,unit=unit,currency=currency)
+                else:
+                    parser = parse_indicators if kind=='indicators' else parse_capitalization
+                    parsed = parser(html)
                 usable=[r for r in parsed['rows'] if is_verified_close(r)]
-                if kind=='indicators':
+                if history:
+                    ready=len({r['market_date'] for r in usable}) >= 2
+                elif kind=='indicators':
                     ready={r['instrument_id'] for r in usable}==set(INDICATORS)
                 elif 'code=005490' in url:
                     ready=any(r['stock_code']=='005490' for r in usable)
                 else:
-                    ready=set(range(1,11)) <= {r['rank'] for r in usable}
+                    # Undated live rankings are useful raw captures, not closes.
+                    ready=set(range(1,11)) <= {r['rank'] for r in parsed['rows']}
                 if ready or time.monotonic() >= deadline: break
                 time.sleep(0.1)
             if result['status']=='cancelled': break
+            destination = ('equities' if code.isdigit() else 'indicators') if history else kind
             for row in parsed['rows']:
                 row['source_url']=driver.current_url
-                id_field = 'instrument_id' if kind=='indicators' else 'stock_code'
-                _merge_observation(result[kind],row,id_field,result['warnings'])
+                id_field = 'instrument_id' if destination=='indicators' else 'stock_code'
+                _merge_observation(result[destination],row,id_field,result['warnings'])
             result['warnings'].extend(parsed['warnings'])
+            if kind=='equities':
+                # A bounded detail pass obtains actual two-day closes for the
+                # observed Top10; do not reconstruct history from current deltas.
+                known={k for k,_ in pages}
+                for row in parsed['rows']:
+                    stock=row['stock_code']; key='history:'+stock
+                    if key not in known:
+                        pages.append((key,'https://stock.naver.com/domestic/stock/'+stock+'/price'))
+                        known.add(key)
         else:
             ids={r['instrument_id'] for r in result['indicators'] if is_verified_close(r)}
             codes={r['stock_code'] for r in result['equities'] if is_verified_close(r)}
-            ranks={r['rank'] for r in result['equities'] if is_verified_close(r)}
+            ranks={r['rank'] for r in result['equities'] if is_verified_close(r) and r.get('market_cap') is not None
+                   and json.loads(r.get('raw_json') or '{}').get('market_cap_unit')}
             complete=ids==set(INDICATORS) and set(range(1,11))<=ranks and '005490' in codes
             result['status']='complete' if complete else 'partial'
+            if not result['indicators'] and not result['equities']:
+                result['status']='failed'
             if not complete:result['warnings'].append('Verified close evidence incomplete: require all 8 indicators, KRX_ALL ranks 1–10 and 005490; daily gate remains retryable')
     except Exception as exc:
         result['warnings'].append(str(exc)); result['status']='failed'
