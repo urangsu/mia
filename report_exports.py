@@ -61,7 +61,9 @@ def export_pptx(context,path):
         return shape
     # Every table remains native/editable. Eight-row pages leave room for wrapped
     # units/source URLs and the two distinct closing dates, without tiny fonts.
-    for name in REPORT_NAMES:
+    ordered=[name for name in REPORT_NAMES if name in context.tables]
+    ordered.extend(name for name in context.tables if name not in REPORT_NAMES)
+    for name in ordered:
         if name=='보고용_종합':continue
         rows=context.tables[name];body=rows[1:]
         metal=name=='보고용_금속시세'
@@ -105,8 +107,11 @@ def export_pptx(context,path):
     _atomic(path,prs.save)
     return str(path)
 
-def export_excel(context,path):
-    sheets=make_workbook_sheets(context)
+def export_excel(context,path,*,accumulation=False):
+    if accumulation:
+        from report_model import make_accumulation_sheets
+        sheets=make_accumulation_sheets(context)
+    else:sheets=make_workbook_sheets(context)
     if os.name=='nt':
         from excel_secure import write_com_sheets
         write_com_sheets(Path(path),sheets)
@@ -129,13 +134,27 @@ def export_excel(context,path):
     return str(path)
 
 def export_reports(context,output_dir,*,include_excel=False):
+    """Keep each successful artifact even when another renderer/Excel fails.
+
+    Successful calls retain the existing format:path contract. Partial calls add
+    an errors mapping; callers must surface it separately from available paths.
+    Only a run with no successful format raises.
+    """
     output_dir=Path(output_dir);output_dir.mkdir(parents=True,exist_ok=True)
     prefix='report_'+context.snapshot_id[:16]
-    result={}
-    result['html']=export_html(context,output_dir/(prefix+'.html'))
-    result['pptx']=export_pptx(context,output_dir/(prefix+'.pptx'))
-    path=output_dir/(prefix+'_context.json')
-    _atomic(path,lambda p:p.write_text(canonical_json(context.to_dict()),encoding='utf-8'))
-    result['context']=str(path)
-    if include_excel:result['excel']=export_excel(context,output_dir/(prefix+'.xlsx'))
+    jobs=[('html',output_dir/(prefix+'.html'),lambda path:export_html(context,path)),
+          ('pptx',output_dir/(prefix+'.pptx'),lambda path:export_pptx(context,path)),
+          ('context',output_dir/(prefix+'_context.json'),
+           lambda path:_atomic(path,lambda p:p.write_text(canonical_json(context.to_dict()),encoding='utf-8')))]
+    if include_excel:jobs.append(('excel',output_dir/(prefix+'.xlsx'),lambda path:export_excel(context,path)))
+    result={};errors={}
+    for kind,path,write in jobs:
+        try:
+            write(path)
+            result[kind]=str(path)
+        except Exception as exc:
+            errors[kind]=f'{type(exc).__name__}: {str(exc)[:300]}'
+    if not result:
+        raise RuntimeError('보고서 전체 형식 출력 실패: '+'; '.join(kind+': '+error for kind,error in errors.items()))
+    if errors:result['errors']=errors
     return result
