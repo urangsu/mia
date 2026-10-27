@@ -55,7 +55,7 @@ class MetalDashboardTests(unittest.TestCase):
             self.assertEqual([p['value'] for p in lithium['points']],[100,None,101])
             self.assertEqual(lithium['unit'],'$/kg')
             self.assertEqual(result['snapshot_id'],c.snapshot_id)
-            self.assertTrue(any(r['source']=='LME' and r['status']=='unsupported' for r in result['coverage']))
+            self.assertTrue(any(r['source']=='LME' and r['status']=='missing' for r in result['coverage']))
 
     def test_report_displays_product_before_code_without_changing_daily_keys(self):
         with tempfile.TemporaryDirectory() as t:
