@@ -2,6 +2,7 @@
 from __future__ import annotations
 import copy
 import json
+from datetime import datetime
 from PySide6.QtCore import QObject, QThread, Signal, Slot, QTimer, QUrl, Qt
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
@@ -177,10 +178,10 @@ class MainWindow(QMainWindow):
         self.state_chip.setObjectName('stateChip')
         bar.addWidget(self.state_chip)
         bar.addWidget(self.button('snapshot'))
-        bar.addWidget(self.button('collect_public'))
         bar.addWidget(self.button('collect', primary=True))
         layout.addLayout(bar)
         self.summary = SnapshotSummary()
+        self.summary.cards[2].hide()  # Market/index information belongs on the report page.
         layout.addWidget(self.summary)
         self.search = QLineEdit()
         self.search.setPlaceholderText('종목 · 기준일 · 출처 · 상태 검색')
@@ -190,8 +191,7 @@ class MainWindow(QMainWindow):
         tabs = self.dashboard_tabs = QTabWidget()
         self.metals=MetalPanel();tabs.addTab(self.metals,'원료·금속 시황')
         self.search.textChanged.connect(self.metals.search)
-        names = ('금속', '환율', '확정 종가', '시총 원자료', '시총 비교', '종합','주가 종가')
-        for name, title in zip(REPORT_NAMES, names):
+        for name, title in zip(REPORT_NAMES[:2], ('금속','환율')):
             table = DataTable(onboard=True)
             table.onboarding.connect(lambda action: self.nav.setCurrentRow(4) if action == 'settings' else self.submit('diagnose'))
             self.tables[name] = table
@@ -199,17 +199,31 @@ class MainWindow(QMainWindow):
             self.search.textChanged.connect(table.search)
         self.coverage_table=DataTable();tabs.addTab(self.coverage_table,'원천 수집 범위')
         layout.addWidget(tabs, 1)
+        self.details_toggle = QToolButton()
+        self.details_toggle.setText('확인 내역 보기')
+        self.details_toggle.setCheckable(True)
+        self.details_toggle.setArrowType(Qt.RightArrow)
+        self.details_toggle.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.details_toggle.setAccessibleName('확인 내역 펼치기 또는 접기')
+        layout.addWidget(self.details_toggle, alignment=Qt.AlignLeft)
+        self.details_panel=QWidget()
+        details_layout=QVBoxLayout(self.details_panel)
+        details_layout.setContentsMargins(0,0,0,0)
         self.snapshot_warning = QLabel('자료 없음 · 수집 결과와 기준일을 확인하세요.')
         self.snapshot_warning.setObjectName('muted')
         self.snapshot_warning.setWordWrap(True)
-        layout.addWidget(self.snapshot_warning)
-        details = QPushButton('확인 내역 보기 → 실행 기록')
-        details.clicked.connect(lambda: self.nav.setCurrentRow(3))
-        layout.addWidget(details, alignment=Qt.AlignLeft)
+        details_layout.addWidget(self.snapshot_warning)
         self.collection_errors=QLabel();self.collection_errors.setWordWrap(True)
         self.collection_errors.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.collection_errors.setObjectName('collectionErrors');self.collection_errors.hide()
-        layout.addWidget(self.collection_errors)
+        details_layout.addWidget(self.collection_errors)
+        run_log=QPushButton('실행 기록 열기')
+        run_log.clicked.connect(lambda:self.nav.setCurrentRow(3))
+        details_layout.addWidget(run_log,alignment=Qt.AlignLeft)
+        layout.addWidget(self.details_panel)
+        self.details_panel.hide()
+        self.details_toggle.toggled.connect(self.details_panel.setVisible)
+        self.details_toggle.toggled.connect(lambda opened:self.details_toggle.setArrowType(Qt.DownArrow if opened else Qt.RightArrow))
 
     def _reports(self):
         layout = self.page('자료·보고서', '저장된 DB로 출력을 다시 만듭니다. 아래 필터는 보고서에만 적용되며 누적 원본을 줄이지 않습니다.')
@@ -222,6 +236,7 @@ class MainWindow(QMainWindow):
             form.addRow(label, widget)
         layout.addWidget(filters)
         actions = QHBoxLayout()
+        actions.addWidget(self.button('collect_public','주가·지표 수집'))
         actions.addWidget(self.button('reports', primary=True))
         actions.addWidget(self.button('export', 'Excel·보고서 재출력'))
         actions.addStretch()
@@ -233,6 +248,19 @@ class MainWindow(QMainWindow):
         self.open_report.clicked.connect(self.open_output)
         self.open_report.setEnabled(False)
         layout.addWidget(self.open_report, alignment=Qt.AlignLeft)
+        self.report_tabs=QTabWidget()
+        self.report_tabs.setAccessibleName('시장·주가 보고 자료')
+        for name,title in zip(REPORT_NAMES[2:],('확정 종가','시총 원자료','시총 비교','종합','주가 종가')):
+            table=DataTable(onboard=True)
+            table.onboarding.connect(lambda action:self.nav.setCurrentRow(4) if action=='settings' else self.submit('diagnose'))
+            self.tables[name]=table
+            self.report_tabs.addTab(table,title)
+            self.search.textChanged.connect(table.search)
+        lme_table=DataTable(onboard=True)
+        self.tables['보고용_LME']=lme_table
+        self.report_tabs.addTab(lme_table,'LME 공식가격')
+        self.search.textChanged.connect(lme_table.search)
+        layout.addWidget(self.report_tabs,2)
         self.report_detail = QPlainTextEdit()
         self.report_detail.setReadOnly(True)
         self.report_detail.setPlaceholderText('생성된 파일의 실제 경로와 출력 결과가 여기에 표시됩니다.')
@@ -322,7 +350,7 @@ class MainWindow(QMainWindow):
         self.fields['lookback_days'] = days
         form.addRow('수집 기간 (일)', days)
         sources = QHBoxLayout()
-        for key, label in (('fmb_enabled', 'Fastmarkets'), ('fx_enabled', 'SMBS 환율'), ('naver_enabled', 'NAVER DOM'),('fdr_enabled','FDR 공개 종가')):
+        for key, label in (('fmb_enabled', 'Fastmarkets'), ('fx_enabled', 'SMBS 환율'), ('lme_enabled','LME 공식가격 · 공개 표'),('naver_enabled', 'NAVER 일별 종가 · 로그인 불필요'),('fdr_enabled','FDR/Yahoo · 선택 사항')):
             field = QCheckBox(label)
             self.fields[key] = field
             sources.addWidget(field)
@@ -531,7 +559,14 @@ class MainWindow(QMainWindow):
         self.summary.update_snapshot(data, self.current_settings().get('representative_symbols', []))
         for name, table in self.tables.items():
             table.set_rows(data.get('tables', {}).get(name, []))
-        self.as_of.setText(f"자료 기준 · {data.get('as_of') or '없음'}   |   snapshot {str(data.get('snapshot_id') or '없음')[:12]}")
+            if name in ('보고용_금속시세','보고용_LME'):
+                for column,header in enumerate(table.model.headers):
+                    table.view.setColumnHidden(column,header=='출처')
+        stamp=data.get('as_of') or ''
+        try:stamp=datetime.fromisoformat(stamp).strftime('%Y-%m-%d %H:%M')
+        except (ValueError,TypeError):pass
+        self.as_of.setText('자료 갱신 · '+(stamp or '없음'))
+        self.as_of.setToolTip('원본 자료 기준 '+str(data.get('as_of') or '없음')+'\nSnapshot '+str(data.get('snapshot_id') or '없음'))
         warnings = data.get('warnings') or []
         has_data = any(table.model.rows for table in self.tables.values())
         missing = sum('missing_history' in str(w) for w in warnings)

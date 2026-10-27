@@ -7,7 +7,7 @@ from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QTableView, QLabel, QHeaderView, QPushButton
 
 STATUS_TEXT = {'complete':'완료', 'partial':'부분 완료', 'failed':'실패', 'cancelled':'취소', 'needs_action':'확인 필요', 'running':'실행 중', 'pending':'대기', 'skipped':'생략'}
-STAGE_TEXT = {'fmb':'금속', 'fx':'환율', 'naver':'NAVER DOM','fdr':'FDR 공개 종가', 'excel':'Excel', 'reports':'보고서', 'collect':'수집', 'export':'출력', 'ecm':'ECM'}
+STAGE_TEXT = {'fmb':'금속', 'fx':'환율', 'lme':'LME 공식가격','naver':'NAVER 일별 종가','fdr':'FDR 공개 종가', 'excel':'Excel', 'reports':'보고서', 'collect':'수집', 'export':'출력', 'ecm':'ECM'}
 
 
 def concise_feedback(action, state, message):
@@ -239,6 +239,10 @@ class SnapshotSummary(QWidget):
             rows = list(tables.get(key, []))[1:]
             confirmed = [r for r in rows if len(r) > 2 and r[2] is not None and (index != 2 or 'close_pair' in r)]
             dates = [str(r[1]) for r in confirmed if r[1]]
+            if index==0:
+                lme=[r for r in list(tables.get('보고용_LME',[]))[1:] if len(r)>4 and r[4] is not None]
+                dates.extend(str(r[1]) for r in lme if r[1])
+                confirmed.extend(lme)
             detail = ('최근 기준일 ' + max(dates)) if dates else '기준일 미확인'
             if index == 2:
                 detail += f' · 이력 부족 {sum("missing_history" in r for r in rows)}개'
@@ -248,4 +252,8 @@ class SnapshotSummary(QWidget):
         code_index=headers.index('코드') if '코드' in headers else 0
         selected = [r for r in rows if str(r[code_index]) in symbols]
         text = '   /   '.join(f'{r[0]}  {r[2] if r[2] is not None else "미확인"} {r[3]} · {r[1] or "기준일 없음"}' for r in selected[:4] if len(r) >= 4)
-        self.representatives.setText('대표 금속 · ' + (text or '선택 종목의 저장 자료 없음' if symbols else '설정에서 표시할 종목 코드를 지정하세요.'))
+        if not symbols:
+            lme=[r for r in list(tables.get('보고용_LME',[]))[1:] if len(r)>5 and r[2]=='Cash' and r[3]=='Ask' and r[4] is not None]
+            order={'니켈':0,'구리':1,'코발트':2}
+            text='   /   '.join(f'{r[0]} Cash Ask  {r[4]:,.2f} {r[5]} · {r[1]}' for r in sorted(lme,key=lambda r:order.get(r[0],9))[:3])
+        self.representatives.setText('대표 금속 · ' + (text or ('선택 종목의 저장 자료 없음' if symbols else '설정에서 표시할 종목 코드를 지정하세요.')))

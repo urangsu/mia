@@ -137,3 +137,5 @@ class MetalPanel(QWidget):
         self.chart.set_series(item,points)
         self.history.set_rows([('고시일','Mid','단위','구분','상태','출처')]+[
             (p['date'],p['value'],item['unit'],item['mode'],p['status'],item['source']) for p in reversed(points)])
+        # Hide presentation only; provenance remains in the model and export data.
+        self.history.view.setColumnHidden(5,True)
