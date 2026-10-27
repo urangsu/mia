@@ -4,7 +4,7 @@ import io
 import sqlite3
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stdout, closing
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -34,13 +34,13 @@ class V353Tests(unittest.TestCase):
             self.assertEqual(save_rates(p,[quote])['inserted'],1)
             self.assertEqual(save_rates(p,[quote])['unchanged'],1)
             self.assertEqual(len(load_rates(p)),1)
-            with sqlite3.connect(p) as db:
+            with closing(sqlite3.connect(p)) as db, db:
                 self.assertEqual(db.execute('select count(*) from fx_rate_revisions').fetchone()[0],0)
 
     def test_console_db_readonly_check_includes_actual_price(self):
         with tempfile.TemporaryDirectory() as td:
             p=Path(td)/'fastmarkets_prices_v3.sqlite3'
-            with sqlite3.connect(p) as db:
+            with closing(sqlite3.connect(p)) as db, db:
                 db.execute('CREATE TABLE prices (id INTEGER PRIMARY KEY)')
             save_rates(p,[FXQuote('2026-09-28','USD','1352.00','-8.00',1)])
             out=io.StringIO()

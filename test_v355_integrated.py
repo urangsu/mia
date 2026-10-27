@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 from datetime import datetime, timedelta, date
 import tempfile
 import sqlite3
+from contextlib import closing
 import sys
 import types
 from unittest.mock import patch
@@ -34,7 +35,7 @@ class TestIntegrationV355(unittest.TestCase):
             a=fx.save_rates(db,[q]);b=fx.save_rates(db,[q])
             self.assertEqual(a['inserted'],1)
             self.assertEqual(b,{'inserted':0,'updated':0,'unchanged':1})
-            with sqlite3.connect(db) as cn:
+            with closing(sqlite3.connect(db)) as cn, cn:
                 self.assertEqual(cn.execute('select count(*) from fx_rates').fetchone()[0],1)
     def test_shared_tab_closed_after_navigation_failure(self):
         browser=MagicMock()
