@@ -43,6 +43,7 @@ py -3 MIA_Collector.py
 
 [AGENTS.md](AGENTS.md), [작업지시](docs/CODEX_WORK_ORDER.md),
 [수정 범위와 실사이트 확인](docs/COLLECTION_INSTALL_REPAIR_20261027.md),
+[검증 결과와 미검증 항목](docs/REPAIR_VALIDATION_20261027.md),
 [사진 기준 누적표 구조](docs/METAL_WORKBOOK_LAYOUT.md), [인수 경계](HANDOFF_V37.md)를 읽습니다.
 오프라인 설치/검증: `bash scripts/codex_setup.sh`, `bash scripts/codex_check.sh`.
 과거 버전 기록은 [변경 내역](CHANGELOG_V37.md)에 보존합니다.
