@@ -30,8 +30,8 @@ class PublicRecoveryTests(unittest.TestCase):
                 result=service.run('collect_public')
             self.assertEqual(result['status'],'partial')
             run=collect.call_args.args[0]
-            self.assertTrue(run['fdr_enabled'])
-            self.assertFalse(any(run[k] for k in ('fmb_enabled','fx_enabled','naver_enabled')))
+            self.assertTrue(run['naver_enabled'])
+            self.assertFalse(any(run[k] for k in ('fmb_enabled','fx_enabled','fdr_enabled')))
             self.assertEqual(service.settings,before);service.close()
 
     def test_stage_failures_are_identified_not_generic_connection_advice(self):
