@@ -13,16 +13,28 @@ def prepare(observations,targets,captured_at,*,start=None,end=None,series=None,q
     # The 25-code limit bounds one HTTP collection, not years of stored history.
     for code in codes:
         if code.isdigit():specs[code]=instruments([code])[code]
-    eligible=[];pairs={};stocks=[];warnings=[];withdrawn=[];audit=[]
+    eligible=[];pairs={};stocks=[];warnings=[];withdrawn=[];audit=[];calendar_errors={}
     for code in sorted(codes):
         if code not in specs:continue
         spec=specs[code]
         if series is not None and code not in series and not any(str(s).startswith('FDR|'+code+'|') for s in series):continue
-        dates=expected_pair(spec.calendar,captured)
         audit.extend(q for q in quarantine if q['instrument_id']==code and q['source_symbol']==spec.symbol)
         blocked={q['market_date'] for q in quarantine if q['instrument_id']==code and q['source_symbol']==spec.symbol and q['active']}
         if spec.kind!='equity':
             withdrawn.extend((day,f'FDR|{code}|{spec.unit}|Actual|MID') for day in blocked if (not start or day>=start) and (not end or day<end))
+        try:
+            dates=expected_pair(spec.calendar,captured)
+        except Exception as exc:
+            # One unavailable calendar must not suppress unrelated stored sources.
+            calendar_errors[code]=f'{type(exc).__name__}: {str(exc)[:180]}'
+            warnings.append(f'FDR {code}: calendar unavailable ({spec.calendar}); '+calendar_errors[code])
+            pair=dict(instrument_id=code,previous_date=None,prior_date=None,previous_close=None,
+                prior_close=None,change=None,pct=None,unit=spec.unit,currency=spec.currency,
+                status='missing_history',source_url=spec.source_url,previous_source_url=spec.source_url,
+                prior_source_url=spec.source_url,label=spec.label,kind=spec.kind)
+            if spec.kind=='equity':stocks.append(pair)
+            else:pairs[code]=pair
+            continue
         accepted=[]
         for original in observations:
             if original['instrument_id']!=code:continue
@@ -54,4 +66,4 @@ def prepare(observations,targets,captured_at,*,start=None,end=None,series=None,q
         else:pairs[code]=pair
     if codes:
         warnings.append('FDR 출처: 한국지수·국내주가 NAVER, 해외 Yahoo. GOLD=GC=F·WTI=CL=F 연속선물 Close이며 현물·공식 정산가가 아닙니다. US10Y는 CBOE ^TNX입니다.')
-    return dict(indicators=[r for r in eligible if r['kind']!='equity'],observations=eligible,pairs=pairs,stocks=stocks,warnings=warnings,withdrawn=withdrawn,quarantine=audit)
+    return dict(indicators=[r for r in eligible if r['kind']!='equity'],observations=eligible,pairs=pairs,stocks=stocks,warnings=warnings,withdrawn=withdrawn,quarantine=audit,calendar_errors=calendar_errors)

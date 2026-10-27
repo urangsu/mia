@@ -13,6 +13,25 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from bring_in.RESTORE_LATEST_SOURCE import FORMAT,safe_path
 
 
+def company_layout(files):
+    """Keep a small user-facing root; preserve every source-relative path in app/."""
+    visible = {
+        'MIA_Collector.py': 'MIA_Collector.py',
+        'RUN_GUI.cmd': 'RUN_GUI.cmd',
+        'requirements.txt': 'requirements.txt',
+        'requirements-desktop.txt': 'requirements-desktop.txt',
+        'README_회사.txt': 'bring_in/MIA_COMPANY_SETUP_GUIDE_KO.txt',
+    }
+    missing = sorted(set(visible.values()) - set(files))
+    if missing:
+        raise ValueError('회사 배포 필수 파일 누락: ' + ', '.join(missing))
+    for name in files:
+        safe_path(name)
+    layout = {'app/' + name: content for name, content in files.items()}
+    layout.update({name: files[source] for name, source in visible.items()})
+    return layout
+
+
 def write_bundle(files,commit,output):
     for name in files:safe_path(name)
     if 'SOURCE_MANIFEST.json' in files:raise ValueError('예약된 manifest 경로')
@@ -26,7 +45,7 @@ def write_bundle(files,commit,output):
     archive=buffer.getvalue();header=dict(format=FORMAT,source_commit=commit,
         archive_sha256=sha256(archive).hexdigest(),manifest_sha256=sha256(raw).hexdigest())
     output=Path(output);output.mkdir(parents=True,exist_ok=True)
-    txt=output/'MIA_SOURCE_CURRENT.txt';bundle=output/('MIA_SOURCE_'+commit[:12]+'.zip')
+    txt=output/'MIA_SOURCE_CURRENT.txt';bundle=output/'MIA_Collector.zip'
     bundle.write_bytes(archive)
     txt.write_text(json.dumps(header,sort_keys=True)+'\n'+base64.b64encode(archive).decode()+'\n',encoding='utf-8')
     return dict(txt=str(txt),zip=str(bundle),source_commit=commit,file_count=len(files),archive_sha256=header['archive_sha256'])
@@ -46,7 +65,8 @@ def build(repo,revision,output):
     # Include only the new restoration helper, never the old nested bundles.
     helper='bring_in/RESTORE_LATEST_SOURCE.py';files[helper]=git('show',commit+':'+helper)
     launcher='bring_in/RESTORE_LATEST_SOURCE.cmd';files[launcher]=git('show',commit+':'+launcher)
-    result=write_bundle(files,commit,output)
+    guide='bring_in/MIA_COMPANY_SETUP_GUIDE_KO.txt';files[guide]=git('show',commit+':'+guide)
+    result=write_bundle(company_layout(files),commit,output)
     (Path(output)/'RESTORE_LATEST_SOURCE.py').write_bytes(files[helper])
     (Path(output)/'RESTORE_LATEST_SOURCE.cmd').write_bytes(files[launcher])
     return result

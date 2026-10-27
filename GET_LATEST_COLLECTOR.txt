@@ -1,31 +1,17 @@
-현재 개선판: docs/METALS_RECOVERY_GUIDE_20261025.md 참고
-새 단일 TXT: bring_in/MIA_SOURCE_CURRENT.txt + bring_in/RESTORE_LATEST_SOURCE.py
-검증: py RESTORE_LATEST_SOURCE.py --verify-only
-복원: py RESTORE_LATEST_SOURCE.py (기존 폴더 덮어쓰기 금지)
-TXT 헤더 source_commit이 실제 포함된 소스 버전입니다. 아래 PART 안내는 과거 기록입니다.
+MIA Collector — 현재 반입 안내
 
-MIA Collector 과거 소스 가져오기 - SUPT 방식 / 오프라인 TXT 복원
-날짜: 2026-10-23
+GitHub main/bring_in에서 다음만 받습니다.
+1. MIA_SOURCE_CURRENT.txt
+2. RESTORE_LATEST_SOURCE.py
+3. RESTORE_LATEST_SOURCE.cmd (선택)
+4. MIA_COMPANY_SETUP_GUIDE_KO.txt (명령·설명)
 
-저장소: https://github.com/urangsu/mia
-바로가기: https://github.com/urangsu/mia/tree/main/bring_in
+회사에서는 %APPDATA%\Microsoft\AddIns\vsc\매크로에 바로 두어도 됩니다.
+복원 폴더는 MIA_Collector_Update, 실행기는 MIA_Collector.py입니다.
+날짜 이름 폴더를 만들거나 TXT를 다른 폴더로 옮길 필요 없습니다.
+정확한 복사 명령은 MIA_COMPANY_SETUP_GUIDE_KO.txt 하나에 있습니다.
 
-회사 PC에서 git pull 및 codeload.github.com ZIP이 차단되어도,
-실제 소스를 담은 MIA_COLLECTOR_PART_01.txt ~ _11.txt를 오프라인 파일로 반입하여
-RESTORE_MIA_FROM_TXT.py로 복원할 수 있습니다.
-
-방법:
-1. 위 bring_in 경로에서 MIA_COLLECTOR_PART_01.txt~11.txt 파일을 전부 다운로드.
-2. RESTORE_MIA_FROM_TXT.py / RESTORE_MIA_FROM_TXT.cmd를 함께 저장.
-3. 같은 폴더에서 RESTORE_MIA_FROM_TXT.cmd를 더블클릭하거나
-   py -3 .\RESTORE_MIA_FROM_TXT.py --project collector --verify-only
-   py -3 .\RESTORE_MIA_FROM_TXT.py --project collector
-4. %LOCALAPPDATA%\MIA_Text_Restored\MIA_Collector_<커밋>에 106개 원본 소스 재구성.
-5. 필요한 Python 의존성과 회사 Windows 실환경은 별도 승인/검증.
-
-TXT는 소스 데이터 파일이며 Invoke-Expression으로 실행하지 않습니다.
-기존 SQLite/Excel/ECM/Chrome 및 회사 설정 덮어쓰기 금지.
-
-현재 번들은 2026-10-23에 고정한 커밋
-8b0fc14781f33b44e0c1e5a0b446dfe53000c0a3 기준입니다.
-미래의 새 main HEAD를 자동 반영하지 않습니다. 소스가 바뀌면 TXT 번들도 다시 생성해야 합니다.
+예전 MIA_COLLECTOR_ONEFILE / PART_01~11 / RESTORE_MIA_FROM_TXT는
+bring_in/archive/legacy의 과거 기록이며 현재 설치에 쓰지 않습니다.
+기존 운영 폴더·DB·Excel·브라우저 프로필을 지우지 마세요.
+TXT 헤더 source_commit과 SHA-256이 실제 포함된 소스의 기준입니다.

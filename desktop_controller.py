@@ -61,7 +61,7 @@ class CollectorService:
         try:
             values=deepcopy(settings if settings is not None else self.settings)
             if action=='collect_public':
-                values.update(fmb_enabled=False,fx_enabled=False,naver_enabled=False,fdr_enabled=True)
+                values.update(fmb_enabled=False,fx_enabled=False,lme_enabled=False,naver_enabled=True,fdr_enabled=False)
             cfg = validate(values, 'collect' if action=='collect_public' else action)
             if cfg.get('_settings_warning') and action not in ('save_settings','snapshot','history','diagnose','schedule_status'):
                 return self._result('needs_action', cfg['_settings_warning'] + ' 설정을 확인하고 저장하세요.')

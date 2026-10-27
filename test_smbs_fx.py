@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import tempfile,unittest,sqlite3
+from contextlib import closing
 from decimal import Decimal
 from pathlib import Path
 from smbs_rates import (FXQuote,FXPageError,decode_date,decode_difference,parse_row,
@@ -37,7 +38,7 @@ class SMBSContracts(unittest.TestCase):
             self.assertEqual(save_rates(db,[q])['inserted'],1)
             self.assertEqual(save_rates(db,[q])['unchanged'],1)
             self.assertEqual(save_rates(db,[FXQuote('2026-09-28','USD','1351.50','-8.50',1)])['updated'],1)
-            with sqlite3.connect(db) as cx:
+            with closing(sqlite3.connect(db)) as cx, cx:
                 self.assertEqual(cx.execute('SELECT COUNT(*) FROM fx_rates').fetchone()[0],1)
                 self.assertEqual(cx.execute('SELECT COUNT(*) FROM fx_rate_revisions').fetchone()[0],1)
             self.assertEqual(load_rates(db)[0].rate,'1351.50')

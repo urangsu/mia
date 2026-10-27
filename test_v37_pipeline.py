@@ -64,7 +64,7 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(build.call_count,1)
             self.assertIs(excel.call_args.args[0],context)
             self.assertIs(reports.call_args.args[0],context)
-            self.assertFalse(reports.call_args.kwargs['include_excel'])
+            self.assertTrue(reports.call_args.kwargs['include_excel'])
             self.assertEqual(result['snapshot_id'],'abc')
 
     def test_nonwindows_existing_workbook_is_preserved_and_reports_continue(self):
@@ -81,7 +81,7 @@ class PipelineTests(unittest.TestCase):
         m=self.module();context=SimpleNamespace(snapshot_id='abc',warnings=())
         with tempfile.TemporaryDirectory() as folder:
             sheets={'sheet':[(1,)]}
-            with patch.object(m.report_model,'build_context',return_value=context),patch.object(m.report_model,'make_workbook_sheets',return_value=sheets),patch.object(m.excel_secure,'write_com_sheets',return_value='com.xlsx') as write,patch.object(m.report_exports,'export_excel') as ordinary,patch.object(m.report_exports,'export_reports',return_value={}),patch.object(m,'IS_WINDOWS',True):
+            with patch.object(m.report_model,'build_context',return_value=context),patch.object(m.report_model,'make_accumulation_sheets',return_value=sheets),patch.object(m.excel_secure,'write_com_sheets',return_value='com.xlsx') as write,patch.object(m.report_exports,'export_excel') as ordinary,patch.object(m.report_exports,'export_reports',return_value={}),patch.object(m,'IS_WINDOWS',True):
                 m.export_only({'data_dir':folder})
             self.assertIs(write.call_args.args[1],sheets)
             ordinary.assert_not_called()

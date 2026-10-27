@@ -29,14 +29,14 @@ class IntegrationTests(unittest.TestCase):
             path=Path(t)/'settings.json';save(path,cfg)
             self.assertTrue(load(path,{})['fdr_enabled'])
 
-    def test_cli_public_only_preserves_workspace_without_browser_access(self):
+    def test_cli_public_only_uses_account_free_naver_without_fmb(self):
         import FastmarketsCollector_v3_7 as e
         with tempfile.TemporaryDirectory() as t,patch.object(e.core,'config_load',return_value={'data_dir':'unused'}), \
              patch('pipeline_v37.run_collection',return_value={'diag':{'status':'partial'}}) as collect:
             self.assertEqual(e.main(['--once','--public-only','--data-dir',t]),2)
             cfg=collect.call_args.args[0]
-            self.assertTrue(cfg['fdr_enabled'])
-            self.assertFalse(any(cfg[k] for k in ('fmb_enabled','fx_enabled','naver_enabled')))
+            self.assertTrue(cfg['naver_enabled'])
+            self.assertFalse(any(cfg[k] for k in ('fmb_enabled','fx_enabled','fdr_enabled')))
 
     def test_fdr_off_explicitly_has_no_network_stage(self):
         import pipeline_v37 as p
