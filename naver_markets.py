@@ -430,6 +430,9 @@ def collect(driver, cancelled, logger=print, force=False):
         original = driver.current_window_handle
         driver.switch_to.new_window('tab')
         owned = driver.current_window_handle
+        if owned==original:
+            owned=None
+            raise RuntimeError('NAVER owned tab was not created; original tab preserved')
         pages = list(PAGES)
         for kind, url in pages:
             if cancelled(): result['status']='cancelled'; break

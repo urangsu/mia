@@ -28,6 +28,16 @@ class Driver:
 
 
 class HistoryIntegrationTests(unittest.TestCase):
+    def test_failed_tab_creation_cannot_close_or_navigate_original(self):
+        class NoNewTab(Driver):
+            def new_window(self,kind):pass
+            def get(self,url):raise AssertionError('must not navigate original tab')
+        driver=NoNewTab()
+        result=n.collect(driver,lambda:False,lambda s:None)
+        self.assertEqual(result['status'],'failed')
+        self.assertEqual(driver.window_handles,['original'])
+        self.assertEqual(driver.current_url,'about:blank')
+
     def test_ranking_names_flow_to_actual_stock_history(self):
         from test_naver_current_cap import CurrentCapDOMTests
         class RankedDriver(Driver):
