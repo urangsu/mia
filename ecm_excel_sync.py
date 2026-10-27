@@ -83,7 +83,7 @@ def _lookup(header1, header2, catalog, origin):
 
 
 def series_source(key):
-    return 'SMBS' if key.startswith('FX_') else 'NAVER' if key.startswith('NAVER|') else 'FDR' if key.startswith('FDR|') else 'FMB'
+    return 'SMBS' if key.startswith('FX_') else 'LME' if key.startswith('LME|') else 'NAVER' if key.startswith('NAVER|') else 'FDR' if key.startswith('FDR|') else 'FMB'
 
 
 def build_plan(source_rows, source_catalog_rows, target_rows, target_catalog_rows,
@@ -240,8 +240,8 @@ def _read_catalog(wb):
 
 
 def _snapshot_from_db(folder, *, with_quarantine=False):
-    from report_model import build_context,make_workbook_sheets
-    sheets=make_workbook_sheets(build_context(Path(folder)))
+    from report_model import build_context,make_accumulation_sheets
+    sheets=make_accumulation_sheets(build_context(Path(folder)))
     result=(sheets['일별요약'],sheets['가격열설정'])
     if with_quarantine:
         from excel_secure import quarantined_cells
