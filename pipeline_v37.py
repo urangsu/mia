@@ -55,21 +55,23 @@ def export_only(settings,*,_lock_held=False):
     output['warnings'].extend(context.warnings)
     if not reports_only:
         try:
-            sheets=report_model.make_workbook_sheets(context)
+            sheets=report_model.make_accumulation_sheets(context)
             if IS_WINDOWS:
                 output['workbook']=str(excel_secure.write_com_sheets(target,sheets))
             elif target.exists():
                 raise RuntimeError('기존 누적 Excel 보존: 비 Windows에서는 기존 파일 갱신을 지원하지 않습니다. Windows Excel COM으로 갱신하세요.')
             else:
                 target.parent.mkdir(parents=True,exist_ok=True)
-                output['workbook']=str(report_exports.export_excel(context,target))
+                output['workbook']=str(report_exports.export_excel(context,target,accumulation=True))
         except Exception as exc:
             output['warnings'].append('누적 Excel 갱신 실패: '+str(exc))
     try:
         output['reports']=report_exports.export_reports(context,
-            Path(settings.get('report_dir') or folder/'reports').expanduser(),include_excel=False)
+            Path(settings.get('report_dir') or folder/'reports').expanduser(),include_excel=True)
+        errors=output['reports'].pop('errors',{})
+        output['warnings'].extend(f'{kind} 보고서 출력 실패: {error}' for kind,error in errors.items())
     except Exception as exc:
-        output['warnings'].append('HTML/PPTX/JSON 보고서 출력 실패: '+str(exc))
+        output['warnings'].append('HTML/PPTX/JSON/Excel 보고서 출력 실패: '+str(exc))
     output['status']='partial' if output['warnings'] else 'complete'
     if output['workbook'] is None and not output['reports']:output['status']='failed'
     return output
@@ -153,6 +155,16 @@ def run_collection(settings,browser,cancelled,logger=print):
                     result.setdefault('warnings',[]).append('SMBS 신규 검증 환율 없음: 기존 SQLite 자료만 보존')
                 return result
             diag['fx'],_=stage('fx',fx if settings.get('fx_enabled',True) else lambda:{'status':'disabled'})
+            if checkpoint():return output
+
+            if settings.get('lme_enabled',False):
+                def lme():
+                    from lme_official import collect_and_save
+                    driver=browser.driver
+                    if driver is None:driver=browser.connect()
+                    return collect_and_save(driver,db,cancel,logger)
+                diag['lme'],_=stage('lme',lme)
+            else:diag['lme']={'status':'disabled'}
             if checkpoint():return output
 
             if settings.get('fdr_enabled',False):
