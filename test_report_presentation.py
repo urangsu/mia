@@ -71,7 +71,7 @@ class ReportPresentationTests(unittest.TestCase):
 
     def test_mixed_metal_dates_and_fx_100_jpy_basis_survive(self):
         body=self.render().split('<details id="source-basis"',1)[0]
-        for value in ('2026.10.21','2026.10.27','2026.10.26','100 JPY','$/kg'):
+        for value in ('2026.10.21','2026.10.27','2026.10.26','원/100엔','$/kg'):
             self.assertIn(value,body)
 
     def test_cap_snapshot_selects_latest_per_stock_not_history_or_duplicates(self):
@@ -119,7 +119,46 @@ class ReportPresentationTests(unittest.TestCase):
         from report_presentation import presentation_tables
         market=next(t for t in presentation_tables(sample_context()) if t['kind']=='market')
         bond=next(r for r in market['rows'] if r[0]['text']=='미국 국채 10년')
-        self.assertEqual(bond[3]['text'],'+0.7bp')
+        self.assertEqual(bond[3]['text'],'+0.7 bp')
+
+    def test_units_are_next_to_prices_and_absolute_changes_not_under_names(self):
+        from report_presentation import presentation_tables
+        tables=presentation_tables(sample_context())
+        metal=next(t for t in tables if t['kind']=='metals' and '10.27' in t['name'])
+        self.assertEqual(metal['rows'][0][1]['text'],'13.7 $/kg')
+        self.assertEqual(metal['rows'][0][0]['note'],'')
+        fx=next(t for t in tables if t['kind']=='fx')
+        self.assertEqual(fx['rows'][0][1]['text'],'838.3 원/100엔')
+        self.assertEqual(fx['rows'][0][2]['text'],'-1.53 원/100엔')
+        market=next(t for t in tables if t['kind']=='market')
+        kospi=next(r for r in market['rows'] if r[0]['text']=='코스피')
+        self.assertEqual([c['text'] for c in kospi[1:]],['5,638.34 pt','5,469.47 pt','+168.87 pt','+3.1%'])
+        cap=next(t for t in tables if t['kind']=='caps')
+        self.assertEqual(cap['rows'][0][2]['text'],'14,133,379 억원')
+
+    def test_missing_values_stay_dash_and_percent_units_are_not_duplicated(self):
+        from report_presentation import _value
+        self.assertEqual(_value(None,unit='USD/t')['text'],'—')
+        self.assertEqual(_value(5,percent=True,unit='%')['text'],'5.0%')
+        self.assertEqual(_value(91,percent=True,unit='% payable')['text'],'91.0% payable')
+        self.assertEqual(_value(70000,unit='KRW')['text'],'70,000 원')
+
+    def test_lme_stock_and_cap_comparison_each_keep_their_own_units(self):
+        from report_presentation import presentation_tables
+        context=sample_context();tables=dict(context.tables)
+        tables['보고용_LME']=[('금속','고시일','계약','가격','단위','출처'),
+            ('니켈','2026-10-27','Cash',15000,'USD/t','https://www.lme.com/')]
+        tables['보고용_주가']=[('종목명','시장일','수치','비교일','비교종가','전일대비','등락률(%)','단위','출처'),
+            ('테스트 주식','2026-10-27',70000,'2026-10-26',69000,1000,1.449275,'원','https://stock.naver.com/')]
+        tables['보고용_시총']=[('순위','종목명','코드','시장일','시가총액','단위','출처','수집시각','비교수집일','비교시총','시총증감','등락률(%)'),
+            (1,'삼성전자','005930',None,400,'억원','https://stock.naver.com/','2026-10-28T08:30:00+09:00','2026-10-27',390,10,2.5641)]
+        projected=presentation_tables(replace(context,tables=_freeze_tables(tables)))
+        lme=next(t for t in projected if '공식가격' in t['name'])
+        self.assertEqual(lme['rows'][0][1]['text'],'15,000 USD/t')
+        stock=next(t for t in projected if t['kind']=='stocks')
+        self.assertEqual([c['text'] for c in stock['rows'][0][1:]],['70,000 원','69,000 원','+1,000 원','+1.4%'])
+        cap=next(t for t in projected if t['kind']=='caps')
+        self.assertEqual([c['text'] for c in cap['rows'][0][2:]],['400 억원','390 억원','+10 억원','+2.6%'])
 
     def test_safe_links_reject_credentials_and_active_schemes(self):
         from report_presentation import safe_url

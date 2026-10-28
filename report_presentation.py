@@ -85,12 +85,32 @@ def _name(text,source='',note=''):
     return dict(text=str(text or '이름 미확인'),href=safe_url(source),css='name',note=note)
 
 
-def _value(value, *, percent=False,signed=False):
+def _display_unit(unit):
+    unit = str(unit or '').strip()
+    if unit in ('point','points','포인트'):
+        return 'pt'
+    if unit=='KRW':
+        return '원'
+    basis = re.fullmatch(r'KRW/(\d+) (USD|EUR|JPY|CNH|CNY)',unit)
+    if basis:
+        amount,currency = basis.groups()
+        currency = {'USD':'달러','EUR':'유로','JPY':'엔','CNH':'위안','CNY':'위안'}[currency]
+        return '원/'+('' if amount=='1' else amount)+currency
+    return unit
+
+
+def _value(value, *, percent=False,signed=False,unit=''):
     number = _number(value)
     css = 'numeric'
     if signed and number:
         css += ' positive' if number>0 else ' negative'
-    return dict(text=percentage(value,signed=signed) if percent else number_text(value,signed=signed),css=css,href='',note='')
+    text = percentage(value,signed=signed) if percent else number_text(value,signed=signed)
+    suffix = _display_unit(unit)
+    if percent:
+        suffix = suffix.replace('%','').strip()
+    if number is not None and suffix:
+        text += ' '+suffix
+    return dict(text=text,css=css,href='',note='')
 
 
 def _table(kind,title,subtitle,headers,rows, *, overview=False):
@@ -131,44 +151,44 @@ def presentation_tables(context):
     for (day,),rows in _groups(_records(context,'보고용_금속시세'),'고시일'):
         body = []
         for row in rows:
-            note = str(row.get('단위') or '단위 미확인')
+            unit = str(row.get('단위') or '단위 미확인')
+            note = ''
             if row.get('구분')=='Forecast':
-                note += ' · 전망치'
+                note = '전망치'
             source = row.get('출처')
             if (not safe_url(source) and source in ('Chart','AG Grid','FMB')
                     and re.fullmatch(r'[a-zA-Z0-9_-]{12,80}',context.workspace_id)):
                 source = 'https://dashboard.fastmarkets.com/w/'+context.workspace_id+'/'
             cell = _name(row.get('품목명'),source,note)
             cell['detail'] = row.get('원본 조건') or ''
-            body.append([cell,_value(row.get('Mid'),percent='%' in note)])
+            body.append([cell,_value(row.get('Mid'),percent='%' in unit,unit=unit)])
         tables.append(_table('metals','금속 가격 ('+_day(day)+')','',('품목','가격'),body))
     for (day,),rows in _groups(_records(context,'보고용_LME'),'고시일'):
-        body = [[_name(r['금속']+(' 현물' if r['계약']=='Cash' else ' 3개월물'),r.get('출처')),_value(r.get('가격'))] for r in rows]
-        tables.append(_table('metals','금속 공식가격 ('+_day(day)+')','USD/t · Ask · 현물은 Official Settlement',('금속','가격'),body))
+        body = [[_name(r['금속']+(' 현물' if r['계약']=='Cash' else ' 3개월물'),r.get('출처')),_value(r.get('가격'),unit=r.get('단위'))] for r in rows]
+        tables.append(_table('metals','금속 공식가격 ('+_day(day)+')','Ask · 현물은 Official Settlement',('금속','가격'),body))
     for (day,),rows in _groups(_records(context,'보고용_환율'),'고시일'):
         body = []
         for row in rows:
             source = safe_url(row.get('출처'))
             if not source and row.get('출처') in ('SMBS','서울외국환중개'):
                 source = 'http://www.smbs.biz/ExRate/StdExRate.jsp'
-            basis = str(row.get('단위') or '').replace('KRW/','')
-            body.append([_name(row.get('통화'),source,basis),_value(row.get('매매기준율')),_value(row.get('전일대비'),signed=True)])
-        tables.append(_table('fx','환율 ('+_day(day)+')','원 · 표기 외화 단위당 매매기준율',('통화','기준율','전일 대비'),body))
+            unit = row.get('단위') or ''
+            body.append([_name(row.get('통화'),source),_value(row.get('매매기준율'),unit=unit),_value(row.get('전일대비'),signed=True,unit=unit)])
+        tables.append(_table('fx','환율 ('+_day(day)+')','매매기준율',('통화','기준율','전일 대비'),body))
     for name,kind,title in (('보고용_시장지표','market','시장지표'),('보고용_주가','stocks','주가')):
         for (day,prior),rows in _groups(_records(context,name),'시장일','비교일'):
             body = []
             for row in rows:
                 unit = row.get('단위') or ''
                 label = row.get('종목명') or LABELS.get(row.get('지표'),row.get('지표'))
-                note = '' if kind=='stocks' else {'point':'포인트','points':'포인트'}.get(unit,unit)
-                change = _value(row.get('전일대비'),signed=True)
+                change = _value(row.get('전일대비'),signed=True,unit=unit)
                 if unit=='%' and _number(row.get('전일대비')) is not None:
                     # Yield changes: percentage points -> basis points, not % return.
-                    change['text'] = percentage(_number(row['전일대비'])*100).replace('%','bp')
-                body.append([_name(label,row.get('출처'),note),_value(row.get('수치'),percent=unit=='%'),
-                    _value(row.get('비교종가'),percent=unit=='%'),change,
+                    change['text'] = percentage(_number(row['전일대비'])*100).replace('%',' bp')
+                body.append([_name(label,row.get('출처')),_value(row.get('수치'),percent=unit=='%',unit=unit),
+                    _value(row.get('비교종가'),percent=unit=='%',unit=unit),change,
                     _value(row.get('등락률(%)'),percent=True,signed=True)])
-            subtitle = '원 · 확정 종가' if kind=='stocks' else '확정 종가 비교'
+            subtitle = '확정 종가' if kind=='stocks' else '확정 종가 비교'
             if any('calendar_unverified' in str(r.get('상태')) for r in rows):
                 subtitle = '관측 종가 · 최신 거래일 확인 필요'
             tables.append(_table(kind,title+' ('+_day(day)+')',subtitle,
@@ -180,16 +200,15 @@ def presentation_tables(context):
     for (day,prior,unit),rows in _groups(caps,'시장일','비교수집일','단위'):
         capture = any(r.get('수집시각') for r in rows)
         subtitle = capture_label([r.get('수집시각') for r in rows])+' · 확정 종가 아님' if capture else '시장 기준일 '+_day(day)
-        subtitle += ' · '+(unit or '단위 미확인')
         comparison = any('비교시총' in r for r in rows)
         if comparison:
             subtitle += ' · 수집 스냅샷 비교 ('+_day(prior)+')' if prior else ' · 첫 수집: 이전 비교 자료 없음'
         headers = ['순위','종목','시가총액']+(['비교 시총','증감','등락률'] if comparison else [])
         body = []
         for row in rows:
-            item = [_value(row.get('순위')),_name(row.get('종목명'),row.get('출처')),_value(row.get('시가총액') if unit and unit!='미확인' else None)]
+            item = [_value(row.get('순위')),_name(row.get('종목명'),row.get('출처')),_value(row.get('시가총액') if unit and unit!='미확인' else None,unit=unit)]
             if comparison:
-                item += [_value(row.get('비교시총')),_value(row.get('시총증감'),signed=True),_value(row.get('등락률(%)'),percent=True,signed=True)]
+                item += [_value(row.get('비교시총'),unit=unit),_value(row.get('시총증감'),signed=True,unit=unit),_value(row.get('등락률(%)'),percent=True,signed=True)]
             body.append(item)
         tables.append(_table('caps','시가총액'+(' · 수집 스냅샷' if capture else ' ('+_day(day)+')'),subtitle,headers,body))
     order = {'metals':0,'fx':1,'market':2,'caps':3,'stocks':4}
@@ -200,6 +219,6 @@ def presentation_tables(context):
         for row in rows:
             label = names.get(str(row.get('종목'))) or LABELS.get(row.get('종목'),row.get('종목'))
             unit = row.get('단위') or ''
-            body.append([_name(label,row.get('출처'),unit),_value(row.get('수치'),percent='%' in unit)])
+            body.append([_name(label,row.get('출처')),_value(row.get('수치'),percent='%' in unit,unit=unit)])
         tables.append(_table('overview','종합 ('+_day(day)+')','',('항목','수치'),body,overview=True))
     return tables
