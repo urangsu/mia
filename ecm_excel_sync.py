@@ -83,7 +83,7 @@ def _lookup(header1, header2, catalog, origin):
 
 
 def series_source(key):
-    return 'SMBS' if key.startswith('FX_') else 'LME' if key.startswith('LME|') else 'NAVER' if key.startswith('NAVER|') else 'FDR' if key.startswith('FDR|') else 'FMB'
+    return 'SMBS' if key.startswith('FX_') else 'LME' if key.startswith('LME|') else 'SMM' if key.startswith('SMM|') else 'NAVER' if key.startswith('NAVER|') else 'FDR' if key.startswith('FDR|') else 'FMB'
 
 
 def build_plan(source_rows, source_catalog_rows, target_rows, target_catalog_rows,
@@ -212,13 +212,13 @@ def _attached_excel(expected_basename,local_path=None,target_fullname=None):
         try:excel=win32.GetActiveObject('Excel.Application')
         except Exception as exc:
             raise ECMBlocked('ECM 문서가 데스크톱 Microsoft Excel에서 열려 있지 않습니다. 브라우저 미리보기만 열린 경우 자동 반영 불가') from exc
-        expected=expected_basename.lower().removesuffix('.xlsx')+'.xlsx'
+        from ecm_names import file_matches
         books=[]
         for i in range(1,excel.Workbooks.Count+1):
             wb=excel.Workbooks(i)
             try:
                 full=str(wb.FullName)
-                if wb.Name.lower()==expected and (not target_fullname or full.casefold()==target_fullname.casefold()):
+                if file_matches(str(wb.Name),expected_basename,allow_generated=bool(target_fullname)) and (not target_fullname or full.casefold()==target_fullname.casefold()):
                     if local_path and str(Path(full).resolve()).casefold()==str(Path(local_path).resolve()).casefold():
                         continue
                     books.append(wb)
@@ -249,16 +249,52 @@ def _snapshot_from_db(folder, *, with_quarantine=False):
     return result
 
 
+def _macro_signature(wb):
+    from ecm_names import split_name
+    if split_name(str(wb.Name))[1]!='.xlsm':return {}
+    try:
+        signature=dict(excel_file_format=int(wb.FileFormat),has_vba=bool(wb.HasVBProject))
+    except Exception as exc:raise ECMBlocked('XLSM 형식/매크로 보존 정보를 확인하지 못했습니다.') from exc
+    if signature['excel_file_format']!=52:raise ECMBlocked('XLSM 문서의 Excel FileFormat이 52가 아닙니다. 형식 변환 없이 중단합니다.')
+    return signature
+
+
+def _select_sheet(wb,requested):
+    requested=requested or '일별요약'
+    try:return requested,wb.Worksheets(requested)
+    except Exception as exc:
+        if requested!='일별요약':raise ECMBlocked(requested+' 시트가 없습니다.') from exc
+    try:return '금속시세',wb.Worksheets('금속시세')
+    except Exception as exc:raise ECMBlocked('일별요약 또는 기존 금속시세 시트를 찾지 못했습니다.') from exc
+
+
+def _expand_outlines(wb):
+    """Expand native groups only, never unprotect or unhide unrelated manual rows."""
+    try:
+        for index in range(1,int(wb.Worksheets.Count)+1):
+            wb.Worksheets(index).Outline.ShowLevels(8,8)
+    except Exception as exc:raise ECMBlocked('ECM 접기 펼치기 실패: 시트 보호/편집 권한을 확인하세요. 보호를 해제하지 않았습니다.') from exc
+
+
+def _plan_for_sheet(source,catalog,clears,wb,ws,*,column_map=None):
+    dest=_read_matrix(ws)
+    from ecm_matrix import is_photo_matrix,build_matrix_plan
+    if is_photo_matrix(dest):
+        _expand_outlines(wb)
+        return build_matrix_plan(source,catalog,dest,column_map=column_map,clear_cells=clears)
+    return build_plan(source,catalog,dest,_read_catalog(wb),date1904=bool(wb.Date1904),clear_cells=clears)
+
+
 def prepare_ecm_plan(folder, expected_basename, *, local_path=None, target_fullname=None,
-                     target_sheet='일별요약', target_hwnd=None, log=print):
+                     target_sheet='일별요약', target_hwnd=None, column_map=None, log=print):
     source, source_catalog, clears=_snapshot_from_db(folder,with_quarantine=True)
     with _attached_excel(expected_basename,local_path,target_fullname) as wb:
         if target_hwnd is not None and int(wb.Application.Hwnd)!=int(target_hwnd):
             raise ECMBlocked('ECM 열기 이후 Excel 프로세스가 변경되었습니다. 다시 확인하세요.')
-        try:ws=wb.Worksheets(target_sheet)
-        except Exception as exc:raise ECMBlocked(f'ECM 통합문서에 {target_sheet} 시트가 없습니다. 올린 Excel 파일을 확인하세요.') from exc
-        dest=_read_matrix(ws);catalog=_read_catalog(wb)
-        plan=build_plan(source,source_catalog,dest,catalog,date1904=bool(wb.Date1904),clear_cells=clears)
+        macro=_macro_signature(wb)
+        target_sheet,ws=_select_sheet(wb,target_sheet)
+        plan=_plan_for_sheet(source,source_catalog,clears,wb,ws,column_map=column_map)
+        plan.update(macro)
         plan['workbook_name']=str(wb.Name);plan['workbook_path']=str(wb.FullName)
         plan['sheet']=target_sheet
         if target_hwnd is not None:plan['excel_hwnd']=int(target_hwnd)
@@ -277,7 +313,9 @@ def apply_ecm_plan(folder, expected_basename, approved_plan, *, local_path=None,
             raise ECMBlocked('승인 이후 Excel 프로세스가 변경되어 반영을 차단했습니다.')
         ws=wb.Worksheets(sheet)
         if ws.ProtectContents:raise ECMBlocked(f'{sheet} 시트가 보호돼 있어 자동입력이 불가합니다.')
-        current=build_plan(source,source_catalog,_read_matrix(ws),_read_catalog(wb),date1904=bool(wb.Date1904),clear_cells=clears)
+        macro=_macro_signature(wb)
+        current=_plan_for_sheet(source,source_catalog,clears,wb,ws,column_map=approved_plan.get('column_map'))
+        current.update(macro)
         current['workbook_name']=str(wb.Name);current['workbook_path']=str(wb.FullName);current['sheet']=sheet
         if 'excel_hwnd' in approved_plan:current['excel_hwnd']=int(wb.Application.Hwnd)
         sig=plan_fingerprint(current)
@@ -327,6 +365,7 @@ def apply_ecm_plan(folder, expected_basename, approved_plan, *, local_path=None,
             put_blocks(ws,current['edits'],history)
             # COM .Save is preferred to Ctrl+S, but does NOT prove ECM check-in.
             wb.Save()
+            if _macro_signature(wb)!=macro:raise ECMBlocked('저장 전후 XLSM 형식/매크로 존재 여부 변경: 직접 확인이 필요합니다.')
             for e in current['edits']:
                 v=ws.Cells(e['row'],e['col']).Value2
                 valid=v in (None,'') if e['incoming'] is None else _decimal(v)==_decimal(e['incoming'])
@@ -343,7 +382,8 @@ def apply_ecm_plan(folder, expected_basename, approved_plan, *, local_path=None,
         log(f'ECM Excel Save 및 셀 검증 완료 ({len(current["edits"])}셀). 서버 반영/체크인 여부는 ECM에서 별도 확인 필요')
         return {'status':'LOCAL_SAVED_SERVER_UNVERIFIED','applied':len(current['edits']),
                 'created_rows':len(current['new_dates']),'created_cols':len(current['new_columns']),
-                'workbook':str(wb.Name),'sheet':sheet,'server_verified':False}
+                'workbook':str(wb.Name),'sheet':sheet,'server_verified':False,
+                'unmapped_columns':current.get('unmapped_columns',[]),'warnings':current.get('warnings',[])}
 
 
 
