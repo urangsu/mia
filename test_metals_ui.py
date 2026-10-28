@@ -7,6 +7,27 @@ import test_desktop_ui as legacy
 
 
 class MetalsUITests(unittest.TestCase):
+    def test_one_metal_surface_and_click_latest_row_selects_history(self):
+        panel=self.window.metals
+        titles=[self.window.dashboard_tabs.tabText(i) for i in range(self.window.dashboard_tabs.count())]
+        self.assertNotIn('금속',titles)
+        items=[dict(id=key,code=key,name='품목 '+key,group='리튬',unit='USD/t',mode='Actual',source='SMM',
+            source_url='https://www.metal.com/',view_key='public',conditions='Synthetic',
+            points=[dict(date='2026-10-27',value=value,status='observed')]) for key,value in [('a',100),('b',200)]]
+        panel.set_data(dict(series=items,coverage=[]))
+        self.assertEqual(panel.latest.model.rowCount(),2)
+        target=panel.latest.proxy.mapFromSource(panel.latest.model.index(1,0))
+        panel.latest.view.clicked.emit(target)
+        self.assertEqual(panel.chart.series['id'],'b')
+        self.assertEqual(panel.chart.points[0]['value'],200)
+
+    def test_smm_prices_are_counted_in_the_metal_summary(self):
+        self.window.render_snapshot({'tables':{'보고용_SMM':[
+            ('품목명','고시일','Mid','단위','구분','출처','코드'),
+            ('전지급 탄산리튬','2026-10-28',100,'USD/t','Actual','https://www.metal.com/','SMM-Li-LC-001')]}})
+        self.assertIn('1개',self.window.summary.cards[0].text())
+        self.assertIn('탄산리튬',self.window.summary.representatives.text())
+
     def test_small_window_remains_resizable_with_scrollable_metal_content(self):
         self.window.resize(1060,760);QTest.qWait(10)
         self.assertLessEqual(self.window.height(),760)

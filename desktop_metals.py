@@ -99,6 +99,10 @@ class MetalPanel(QWidget):
         layout.addLayout(ranges)
         self.caption=QLabel('리튬부터 니켈·코발트·망간·구리·블랙매스까지, 실제 저장된 시세만 표시합니다.')
         self.caption.setWordWrap(True);self.caption.setObjectName('muted');layout.addWidget(self.caption)
+        self.latest=DataTable();self.latest.setMinimumHeight(160)
+        self.latest.view.setAccessibleName('금속 가격 목록. 행을 선택하면 아래 가격 추이를 표시합니다.')
+        layout.addWidget(self.latest,1);self._latest_ids=[]
+        self.latest.view.clicked.connect(self._select_latest)
         self.chart=MetalChart();layout.addWidget(self.chart,2)
         self.history=DataTable();self.history.setMinimumHeight(150);layout.addWidget(self.history,1)
         self.group.currentIndexChanged.connect(self._products)
@@ -112,13 +116,26 @@ class MetalPanel(QWidget):
 
     def _products(self,*_):
         current=self.product.currentData();self.product.blockSignals(True);self.product.clear()
+        latest_rows=[('품목','가격','고시일')];self._latest_ids=[]
         for item in self._series:
             if item['group']!=self.group.currentText():continue
             if self._search and self._search not in ' '.join(str(v) for k,v in item.items() if k!='points').casefold():continue
             label=' · '.join((item['name'],item['unit'],item['mode'],item['source']))
             self.product.addItem(label,item['id']);self.product.setItemData(self.product.count()-1,item['conditions']+'\n'+item['code']+' · 뷰 '+item['view_key'],Qt.ToolTipRole)
+            if item.get('source')=='LME' and item.get('side')!='Ask':continue
+            point=item['points'][-1] if item.get('points') else {}
+            value=point.get('value');unit=item['unit']
+            rendered='—' if value is None else ((f'{value:,.1f}'+unit) if '%' in unit else f'{value:,.2f} '+unit)
+            latest_rows.append((item['name'],rendered,point.get('date')));self._latest_ids.append(item['id'])
+        self.latest.set_rows(latest_rows)
         index=self.product.findData(current)
         self.product.setCurrentIndex(index if index>=0 else 0);self.product.blockSignals(False);self.refresh()
+
+    def _select_latest(self,index):
+        source=self.latest.proxy.mapToSource(index)
+        if 0<=source.row()<len(self._latest_ids):
+            selected=self.product.findData(self._latest_ids[source.row()])
+            if selected>=0:self.product.setCurrentIndex(selected)
 
     def refresh(self,*_):
         item=next((s for s in self._series if s['id']==self.product.currentData()),None)

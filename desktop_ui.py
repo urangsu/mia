@@ -195,7 +195,11 @@ class MainWindow(QMainWindow):
             table = DataTable(onboard=True)
             table.onboarding.connect(lambda action: self.nav.setCurrentRow(4) if action == 'settings' else self.submit('diagnose'))
             self.tables[name] = table
-            tabs.addTab(table, title)
+            if name=='보고용_금속시세':
+                # Keep the original raw model for compatibility/search, but do
+                # not expose a second competing metal-price tab.
+                table.setParent(self);table.hide()
+            else:tabs.addTab(table, title)
             self.search.textChanged.connect(table.search)
         self.coverage_table=DataTable();tabs.addTab(self.coverage_table,'원천 수집 범위')
         layout.addWidget(tabs, 1)
@@ -350,7 +354,7 @@ class MainWindow(QMainWindow):
         self.fields['lookback_days'] = days
         form.addRow('수집 기간 (일)', days)
         sources = QHBoxLayout()
-        for key, label in (('fmb_enabled', 'Fastmarkets'), ('fx_enabled', 'SMBS 환율'), ('lme_enabled','LME 공식가격 · 공개 표'),('naver_enabled', 'NAVER 일별 종가 · 로그인 불필요'),('fdr_enabled','FDR/Yahoo · 선택 사항')):
+        for key, label in (('fmb_enabled', 'Fastmarkets'), ('fx_enabled', 'SMBS 환율'), ('lme_enabled','LME 공식가격 · 공개 표'),('smm_enabled','SMM 공개 평균 · 탄산리튬/황산니켈/코발트'),('naver_enabled', 'NAVER 일별 종가 · 로그인 불필요'),('fdr_enabled','FDR/Yahoo · 선택 사항')):
             field = QCheckBox(label)
             self.fields[key] = field
             sources.addWidget(field)
@@ -380,10 +384,12 @@ class MainWindow(QMainWindow):
             row.addWidget(self.button(action))
         form.addRow(row)
         form = group('ECM 문서 식별')
-        for key, label in (('ecm_title', '정확한 파일명 (.xlsx)'), ('ecm_search', '검색어')):
+        for key, label in (('ecm_title', '정확한 파일명 (.xlsx / .xlsm)'), ('ecm_search', '검색어')):
             self.fields[key] = QLineEdit()
             self.fields[key].setAccessibleName(label)
             form.addRow(label, self.fields[key])
+        note=QLabel('기존 금속시세 양식은 1행 품목·3행 출처·ABC 날짜로 자동 연결합니다. 4행 TODAY는 보존하고 5행부터 입력합니다. 접기는 미리보기 때 펼칩니다.')
+        note.setWordWrap(True);form.addRow(note)
         form = group('Windows 사용자 예약')
         self.fields['v37_auto_time'] = QLineEdit('08:30')
         self.fields['v37_auto_time'].setAccessibleName('예약 시각 HH:MM')
