@@ -18,6 +18,8 @@ def main(argv=None):
     p.add_argument('--no-naver',action='store_true',default=None)
     p.add_argument('--public-only',action='store_true',help='로그인 없이 NAVER 공개 일별 종가 수집 (검증된 Chrome 9444 사용)')
     p.add_argument('--no-fdr',action='store_true',default=None)
+    p.add_argument('--smm-only',action='store_true',help='SMM 공개 홈페이지 세 품목만 수집')
+    p.add_argument('--no-smm',action='store_true',default=None)
     p.add_argument('--fdr-force',action='store_true',default=None,help='일일 FDR 캐시를 건너뛰고 정정 이력 재확인')
     p.add_argument('--legacy-gui',action='store_true',help='기존 Tkinter 화면으로 실행')
     p.add_argument('--schedule',metavar='HH:MM',help='로그인한 Windows 사용자 일일 예약 등록')
@@ -43,8 +45,12 @@ def main(argv=None):
                     reports_only=args.reports_only)
     if args.no_naver is not None:settings['naver_enabled']=not args.no_naver
     if args.naver_force is not None:settings['naver_force']=args.naver_force
-    if args.public_only:settings.update(fmb_enabled=False,fx_enabled=False,lme_enabled=False,naver_enabled=True,fdr_enabled=False)
+    if args.public_only:settings.update(fmb_enabled=False,fx_enabled=False,lme_enabled=False,smm_enabled=False,naver_enabled=True,fdr_enabled=False)
     if args.no_fdr is not None:settings['fdr_enabled']=not args.no_fdr
+    if args.no_smm is not None:settings['smm_enabled']=not args.no_smm
+    if args.smm_only:
+        if args.public_only or args.no_smm:p.error('--smm-only는 --public-only/--no-smm과 함께 사용할 수 없습니다.')
+        settings.update(fmb_enabled=False,fx_enabled=False,lme_enabled=False,naver_enabled=False,fdr_enabled=False,smm_enabled=True)
     if args.fdr_force is not None:settings['fdr_force']=args.fdr_force
     if args.start or args.end or args.series:
         if not args.reports_only:p.error('기간·종목 필터는 --reports-only에서만 사용하세요. 누적 원본 축소를 방지합니다.')
@@ -63,7 +69,7 @@ def main(argv=None):
     elif args.once:
         from pipeline_v37 import run_collection
         folder=Path(settings['data_dir'])
-        needs_browser=any(settings.get(k,True) for k in ('fmb_enabled','fx_enabled','naver_enabled')) or settings.get('lme_enabled',False)
+        needs_browser=any(settings.get(k,True) for k in ('fmb_enabled','fx_enabled','naver_enabled')) or settings.get('lme_enabled',False) or settings.get('smm_enabled',False)
         browser=core.ChromeSession(lambda m:core.log(folder,m),driver_path=settings.get('driver_path')) if needs_browser else None
         try:result=run_collection(settings,browser,threading.Event(),lambda m:core.log(folder,m))
         finally:

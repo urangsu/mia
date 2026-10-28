@@ -7,7 +7,7 @@ import re
 from urllib.parse import urlsplit, parse_qsl
 
 EXTRA_DEFAULTS = dict(settings_version=1, fmb_enabled=True, fx_enabled=True,
-                      naver_enabled=True,lme_enabled=True, report_dir='', driver_path='',
+                      naver_enabled=True,lme_enabled=True,smm_enabled=True, report_dir='', driver_path='',
                       representative_symbols=[],fdr_enabled=False,
                       fdr_stock_codes=['005490'],fdr_timeout=20)
 SECRET = re.compile(r'password|passwd|token|cookie|secret|authorization|api[_-]?key|access[_-]?key', re.I)
@@ -61,7 +61,7 @@ def validate(values, action):
     """Return a snapshot; unrelated sources/documents do not gate an action."""
     cfg = deepcopy(values)
     ensure_nonsecret(cfg)
-    for key in ('fmb_enabled', 'fx_enabled', 'naver_enabled','fdr_enabled','lme_enabled'):
+    for key in ('fmb_enabled', 'fx_enabled', 'naver_enabled','fdr_enabled','lme_enabled','smm_enabled'):
         if key in cfg and type(cfg[key]) is not bool:
             raise ValueError(key + ': 사용 여부는 참/거짓이어야 합니다.')
     if action in ('collect', 'export', 'reports', 'snapshot', 'history', 'ecm_preview', 'ecm_apply', 'save_settings'):
@@ -87,7 +87,7 @@ def validate(values, action):
         if isinstance(value,bool) or not isinstance(value,(int,float)) or not 1<=value<=120:
             raise ValueError('FDR 시간 제한은 1~120초입니다.')
         cfg['fdr_timeout']=value
-    if action == 'collect' and not (any(cfg.get(k, True) for k in ('fmb_enabled', 'fx_enabled', 'naver_enabled')) or cfg.get('fdr_enabled',False) or cfg.get('lme_enabled',False)):
+    if action == 'collect' and not (any(cfg.get(k, True) for k in ('fmb_enabled', 'fx_enabled', 'naver_enabled')) or cfg.get('fdr_enabled',False) or cfg.get('lme_enabled',False) or cfg.get('smm_enabled',False)):
         raise ValueError('수집할 출처를 하나 이상 선택하세요.')
     if action == 'connect' or (action == 'collect' and cfg.get('fmb_enabled', True)):
         from FastmarketsCollector_v3_4 import verify_workspace_url
@@ -98,8 +98,8 @@ def validate(values, action):
             raise ValueError('누적 Excel 파일은 .xlsx 형식이어야 합니다.')
     if action in ('ecm_preview', 'ecm_apply'):
         name = str(cfg.get('ecm_title') or '').strip()
-        if not name.lower().endswith('.xlsx') or '/' in name or '\\' in name:
-            raise ValueError('ECM 실제 파일명을 .xlsx 확장자까지 입력하세요.')
+        if Path(name).suffix.lower() not in ('.xlsx','.xlsm') or '/' in name or '\\' in name:
+            raise ValueError('ECM 실제 파일명을 .xlsx 또는 .xlsm 확장자까지 입력하세요.')
         if not str(cfg.get('ecm_search') or '').strip():
             raise ValueError('ECM 검색어를 입력하세요.')
     if action in ('schedule_register', 'save_settings'):
