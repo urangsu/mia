@@ -103,6 +103,10 @@ def dashboard_data(context):
         entry['points']=sorted(entry.pop('_points').values(),key=lambda p:p['date'])
         observed[entry['group']]+=1;result.append(entry)
     lme=_lme_series(sheets);result.extend(lme)
+    from smm_reporting import series_from_rows
+    smm_raw=sheets.get('SMM_시세원본',())
+    smm=series_from_rows([dict(zip(smm_raw[0],row)) for row in smm_raw[1:]]) if smm_raw else []
+    result.extend(smm)
     def order(entry):
         if entry['source']=='LME':
             return (GROUPS.index(entry['group']),0,0 if entry['side']=='Ask' else 1,
@@ -119,6 +123,8 @@ def dashboard_data(context):
             reason=('저장된 LME Official 계약·호가별 관측; Cash Ask만 Settlement, Bid/Ask 평균 없음' if len(asks)==2 else
                     '일부 계약·호가만 저장됨; 누락 가격을 다른 출처로 대체하지 않음' if valid else
                     '공개 Official 수집 경로 구현; 저장 관측 없음 또는 유효한 계약·단위·가격 근거 없음')))
-    coverage.extend(dict(source=s,product=p,status='unsupported',count=0,reason='허용 경로·계약·수집 근거 미확보; 타 출처로 대체하지 않음')
-                    for s,p in (('SMM','VAT 포함/제외'),('GFEX','탄산리튬 계약월별 선물')))
+    coverage.append(dict(source='SMM',product='공개 홈페이지 평균 3품목 + 니켈 환산',
+        status='captured' if len(smm)==4 and all(any(p['value'] is not None for p in s['points']) for s in smm) else 'partial' if smm else 'missing',count=len(smm),
+        reason='공개 USD 평균, VAT 미확인. 과거 이력은 수집일부터 누적, 잠긴 상세 이력은 수집하지 않음.'))
+    coverage.append(dict(source='GFEX',product='탄산리튬 계약월별 선물',status='unsupported',count=0,reason='허용 경로·계약·수집 근거 미확보'))
     return dict(snapshot_id=context.snapshot_id,series=result,coverage=coverage)

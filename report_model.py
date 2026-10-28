@@ -99,7 +99,7 @@ def build_context(folder,start=None,end=None,series=None,*,synthetic=False,works
                 if table in existing:
                     raw[table]=[dict(row) for row in cx.execute('SELECT * FROM '+table+' ORDER BY rowid')]
                 else:warnings.append(table+': 저장 자료 없음')
-            for table in ('fdr_observations','fdr_targets','fdr_quarantine','naver_raw_captures','lme_official_prices'):
+            for table in ('fdr_observations','fdr_targets','fdr_quarantine','naver_raw_captures','lme_official_prices','smm_observations'):
                 raw[table]=[dict(row) for row in cx.execute('SELECT * FROM '+table+' ORDER BY rowid')] if table in existing else []
             if 'price_revisions' in existing:
                 for r in cx.execute('''SELECT symbol,assessment_date,unit,price_mode,view_key FROM price_revisions
@@ -409,10 +409,30 @@ def build_context(folder,start=None,end=None,series=None,*,synthetic=False,works
     for row in cap[1:]:tables['보고용_종합'].append(('시총',row[2],row[3],row[4],row[5],row[6],row[7]))
     for row in stocks[1:]:tables['보고용_종합'].append(('주가',row[0],row[2],row[3],row[8],row[9],row[10]))
     for row in lme_report[1:]:tables['보고용_종합'].append(('금속 LME',row[0]+' '+row[2]+' '+row[3],row[1],row[4],row[5],row[6],row[7]))
+    import smm_reporting
+    smm_rows=[]
+    for row in raw.get('smm_observations',[]):
+        key='SMM|'+str(row['code'])+'|'+str(row['unit'])+'|Actual|AVG'
+        # A request for derived Ni also retains its raw sulphate provenance.
+        derived_key='SMM|'+smm_reporting.NI_EQ+'|USD/t Ni|Derived|AVG'
+        if not dated(row,'market_date') or not (chosen(row['code'],key) or
+                (row['code']=='SMM-NI-NC-001' and chosen(smm_reporting.NI_EQ,derived_key))):
+            continue
+        try:
+            from smm_public import checked_row
+            checked_row(row)
+        except (ValueError,TypeError,KeyError,ArithmeticError):
+            warnings.append('SMM '+str(row.get('code'))+': invalid stored observation excluded');continue
+        smm_rows.append(row);observations.append((row['captured_at'],False))
+    smm_reporting.add_to_snapshot(smm_rows,sheets,tables)
+    if smm_rows:
+        warnings.append('SMM은 공개 홈페이지 USD 평균이며 VAT 기준은 미확인입니다. 니켈 환산은 원시세 / 0.2232 파생값으로 니켈 현물시세가 아닙니다.')
+        for row in tables['보고용_SMM'][1:]:tables['보고용_종합'].append(('금속 SMM',row[0],row[1],row[2],row[3],row[4],row[5]))
     sheets.update(tables)
     source_dates={'FMB':tuple(sorted({p.date for p in prices})), 'SMBS':tuple(sorted({q.quote_date for q in quotes})), 'NAVER 지표':tuple(sorted({r['market_date'] for r in indicators if r.get('provider')!='FinanceDataReader'})), 'NAVER 시총':tuple(sorted({r['market_date'] for r in equities}))}
     if public_raw:source_dates['FDR 종가']=tuple(sorted({r['market_date'] for r in public_raw if dated(r,'market_date')}))
     if lme_rows:source_dates['LME']=tuple(sorted({r['market_date'] for r in lme_rows}))
+    if smm_rows:source_dates['SMM']=tuple(sorted({r['market_date'] for r in smm_rows}))
     context=ReportContext('',_data_as_of(observations), 'TEST / 합성 데이터' if synthetic else '시장 수치 보고서',_freeze_tables(tables),MappingProxyType(source_dates),tuple(dict.fromkeys(warnings)),active,start,end,_freeze_tables(sheets))
     from dataclasses import replace
     payload=context.to_dict();payload.pop('snapshot_id')
