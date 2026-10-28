@@ -167,6 +167,16 @@ def run_collection(settings,browser,cancelled,logger=print):
             else:diag['lme']={'status':'disabled'}
             if checkpoint():return output
 
+            if settings.get('smm_enabled',False):
+                def smm():
+                    from smm_public import collect_and_save
+                    driver=browser.driver
+                    if driver is None:driver=browser.connect()
+                    return collect_and_save(driver,db,cancel,logger)
+                diag['smm'],_=stage('smm',smm)
+            else:diag['smm']={'status':'disabled'}
+            if checkpoint():return output
+
             if settings.get('fdr_enabled',False):
                 def public_history():
                     from fdr_provider import collect_and_save
@@ -192,6 +202,9 @@ def run_collection(settings,browser,cancelled,logger=print):
 
             def csv():
                 if settings.get('fmb_enabled',True):core.export_files(folder)
+                if settings.get('smm_enabled',False):
+                    from smm_public import export_csv
+                    export_csv(db,folder/'smm_public_quotes.csv')
                 if settings.get('fdr_enabled',False):
                     from fdr_provider import export_csv
                     export_csv(db,folder/'public_closes.csv')

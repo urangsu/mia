@@ -24,6 +24,13 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual(result['status'],'failed')
         self.assertIn('synthetic export failure',result['message'])
 
+    def test_public_recovery_does_not_start_smm(self):
+        self.cfg['workspace_url']=self.m.core.WORKSPACE_URL
+        self.cfg['smm_enabled']=True
+        with patch('pipeline_v37.run_collection',return_value={'diag':{'status':'complete','warnings':[]}}) as collect:
+            self.service.run('collect_public',self.cfg)
+        self.assertFalse(collect.call_args.args[0]['smm_enabled'])
+
     def test_snapshot_does_not_save_settings_or_create_db(self):
         self.cfg['workspace_url']=self.m.core.WORKSPACE_URL
         context=SimpleNamespace(tables={},as_of='',snapshot_id='x',warnings=('자료 없음',),_sheets={},source_dates={})

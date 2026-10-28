@@ -61,7 +61,7 @@ class CollectorService:
         try:
             values=deepcopy(settings if settings is not None else self.settings)
             if action=='collect_public':
-                values.update(fmb_enabled=False,fx_enabled=False,lme_enabled=False,naver_enabled=True,fdr_enabled=False)
+                values.update(fmb_enabled=False,fx_enabled=False,lme_enabled=False,smm_enabled=False,naver_enabled=True,fdr_enabled=False)
             cfg = validate(values, 'collect' if action=='collect_public' else action)
             if cfg.get('_settings_warning') and action not in ('save_settings','snapshot','history','diagnose','schedule_status'):
                 return self._result('needs_action', cfg['_settings_warning'] + ' 설정을 확인하고 저장하세요.')
@@ -176,14 +176,15 @@ class CollectorService:
                     target_fullname=bound['full_name'],target_hwnd=bound['excel_hwnd'],log=self._log)
             self._pending = deepcopy(plan)
             self._pending_settings = identity
-            return self._result('needs_action','변경 셀과 실제 문서 경로를 확인한 뒤 승인하세요.',plan)
+            return self._result('needs_action','변경 셀과 실제 문서 경로를 확인한 뒤 승인하세요.'+
+                (f' 미연결 {len(plan["unmapped_columns"])}열은 쓰지 않습니다.' if plan.get('unmapped_columns') else ''),plan,plan.get('warnings',[]))
         if self._pending is None or payload.get('plan') != self._pending or identity != self._pending_settings:
             raise ValueError('현재 설정으로 발급된 ECM 미리보기가 없습니다. 다시 확인하고 승인하세요.')
         plan = self._pending
         self._pending = None  # One approval authorizes one attempt only.
         with exclusive_ecm_job(), core.workspace_scope(cfg.get('workspace_url')):
             result = apply_ecm_plan(folder,cfg['ecm_title'],plan,local_path=target,log=self._log)
-        return self._result('complete','Excel 저장을 확인했습니다. ECM 서버 체크인은 별도 확인이 필요합니다.',result)
+        return self._result('partial' if result.get('unmapped_columns') else 'complete','Excel 저장을 확인했습니다. ECM 서버 체크인은 별도 확인이 필요합니다.',result,result.get('warnings',[]))
 
     def _history(self, folder):
         path = core.path_bundle(folder)['db']

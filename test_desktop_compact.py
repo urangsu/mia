@@ -57,7 +57,7 @@ class CompactDesktopTests(unittest.TestCase):
     def test_market_tables_are_report_only(self):
         w=self.window
         titles={w.dashboard_tabs.tabText(i) for i in range(w.dashboard_tabs.count())}
-        self.assertEqual(titles,{'원료·금속 시황','금속','환율','원천 수집 범위'})
+        self.assertEqual(titles,{'원료·금속 시황','환율','원천 수집 범위'})
         self.assertIn('보고용_주가',w.tables)
         self.assertNotEqual(w.dashboard_tabs.indexOf(w.tables['보고용_주가']),0)
         self.assertEqual(w.dashboard_tabs.indexOf(w.tables['보고용_주가']),-1)

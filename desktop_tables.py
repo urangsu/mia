@@ -243,6 +243,8 @@ class SnapshotSummary(QWidget):
                 lme=[r for r in list(tables.get('보고용_LME',[]))[1:] if len(r)>4 and r[4] is not None]
                 dates.extend(str(r[1]) for r in lme if r[1])
                 confirmed.extend(lme)
+                smm=[r for r in list(tables.get('보고용_SMM',[]))[1:] if len(r)>3 and r[2] is not None]
+                dates.extend(str(r[1]) for r in smm if r[1]);confirmed.extend(smm)
             detail = ('최근 기준일 ' + max(dates)) if dates else '기준일 미확인'
             if index == 2:
                 detail += f' · 이력 부족 {sum("missing_history" in r for r in rows)}개'
@@ -256,4 +258,7 @@ class SnapshotSummary(QWidget):
             lme=[r for r in list(tables.get('보고용_LME',[]))[1:] if len(r)>5 and r[2]=='Cash' and r[3]=='Ask' and r[4] is not None]
             order={'니켈':0,'구리':1,'코발트':2}
             text='   /   '.join(f'{r[0]} Cash Ask  {r[4]:,.2f} {r[5]} · {r[1]}' for r in sorted(lme,key=lambda r:order.get(r[0],9))[:3])
+            if not text:
+                smm=[r for r in list(tables.get('보고용_SMM',[]))[1:] if len(r)>3 and r[2] is not None]
+                text='   /   '.join(f'{r[0]}  {r[2]:,.2f} {r[3]} · {r[1]}' for r in smm[:3])
         self.representatives.setText('대표 금속 · ' + (text or ('선택 종목의 저장 자료 없음' if symbols else '설정에서 표시할 종목 코드를 지정하세요.')))

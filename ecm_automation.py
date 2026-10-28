@@ -435,10 +435,11 @@ def _submit_search(win, edit, log, search_text=None):
 
 
 def _is_target_link(ctrl, target_title=None):
-    target_title=(target_title or TARGET_TITLE).removesuffix('.xlsx')
+    from ecm_names import file_matches
+    target_title=target_title or TARGET_TITLE
     try:
         return (ctrl.ControlTypeName=='HyperlinkControl'
-                and _norm(ctrl.Name) in (target_title,target_title+'.xlsx')
+                and file_matches(_norm(ctrl.Name),target_title,allow_stem=True)
                 and _visible(ctrl) and _rect(ctrl) is not None)
     except Exception:return False
 
@@ -504,7 +505,8 @@ def _double_click_link(item, log, target_title=None):
 
 def _open_documents(target_title=None):
     documents=set()
-    expected=(target_title or TARGET_TITLE).removesuffix('.xlsx')
+    from ecm_names import split_name
+    expected=split_name(target_title or TARGET_TITLE)[0]
     for win in auto.GetRootControl().GetChildren():
         try:
             if win.ClassName not in {'XLMAIN','Chrome_WidgetWin_1'}:continue
