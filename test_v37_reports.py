@@ -141,7 +141,11 @@ class ReportTests(unittest.TestCase):
             self.assertIn('2,500.25',html)
             self.assertNotIn('9,999',html)
             self.assertIn(c.snapshot_id,html)
-            self.assertNotIn('<script',html)
+            # The single authored inline theme controller has no network calls;
+            # input escaping remains checked by the injection fixture below.
+            self.assertEqual(html.count('<script'),1)
+            self.assertIn('<script id="report-controls">',html)
+            self.assertNotIn('<script src=',html)
             prs=Presentation(result['pptx'])
             self.assertGreaterEqual(len(prs.slides),3)
             native=[cell.text for slide in prs.slides for shape in slide.shapes if shape.has_table for row in shape.table.rows for cell in row.cells]

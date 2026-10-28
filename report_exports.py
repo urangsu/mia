@@ -27,8 +27,9 @@ def _atomic(path,writer):
 
 def export_html(context,path):
     from jinja2 import Environment,FileSystemLoader,select_autoescape
+    from report_presentation import presentation_tables,capture_label
     env=Environment(loader=FileSystemLoader(Path(__file__).parent),autoescape=select_autoescape(['html']))
-    tables=[]
+    audit_tables=[]
     for name,rows in context.tables.items():
         body=[]
         for row in rows[1:]:
@@ -39,11 +40,10 @@ def export_html(context,path):
                     css+=' positive' if value>0 else ' negative' if value<0 else ''
                 cells.append(dict(text=display_value(value),css=css))
             body.append(cells)
-        tables.append(dict(name=name,headers=rows[0],rows=body))
-    failures=[w for w in context.warnings if any(k in w.casefold() for k in ('failed','실패','충돌','철회','mismatch','auth'))]
-    notices=[w for w in context.warnings if w not in failures]
-    top_warnings=failures+notices[:max(0,3-len(failures))]
-    rendered=env.get_template('report_template.html').render(context=context,tables=tables,top_warnings=top_warnings)
+        audit_tables.append(dict(name=name,headers=rows[0],rows=body))
+    rendered=env.get_template('report_template.html').render(context=context,
+        tables=presentation_tables(context),audit_tables=audit_tables,
+        capture_label=capture_label([context.as_of]))
     _atomic(path,lambda p:p.write_text(rendered,encoding='utf-8'))
     return str(path)
 
