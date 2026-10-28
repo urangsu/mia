@@ -21,10 +21,10 @@ def workbook_inventory():
 def _key(item):return str(item['full_name']).casefold(),int(item['excel_hwnd'])
 
 def select_observed(before,after,expected_name,local_path=None,prior=None):
-    expected=expected_name.casefold()
+    from ecm_names import file_matches
     before_keys={_key(x) for x in before}
     local=os.path.normcase(os.path.abspath(str(local_path))) if local_path else None
-    candidates=[x for x in after if x['name'].casefold()==expected and not x['read_only']
+    candidates=[x for x in after if file_matches(x['name'],expected_name,allow_generated=True) and not x['read_only']
                 and (not local or os.path.normcase(os.path.abspath(x['full_name']))!=local)]
     fresh=[x for x in candidates if _key(x) not in before_keys]
     if len(fresh)==1:return dict(fresh[0],origin='observed_ecm_open')
