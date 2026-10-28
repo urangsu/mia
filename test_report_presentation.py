@@ -124,7 +124,7 @@ class ReportPresentationTests(unittest.TestCase):
     def test_units_are_next_to_prices_and_absolute_changes_not_under_names(self):
         from report_presentation import presentation_tables
         tables=presentation_tables(sample_context())
-        metal=next(t for t in tables if t['kind']=='metals' and '10.27' in t['name'])
+        metal=next(t for t in tables if t['kind']=='metals')
         self.assertEqual(metal['rows'][0][1]['text'],'13.7 $/kg')
         self.assertEqual(metal['rows'][0][0]['note'],'')
         fx=next(t for t in tables if t['kind']=='fx')
@@ -153,8 +153,8 @@ class ReportPresentationTests(unittest.TestCase):
         tables['보고용_시총']=[('순위','종목명','코드','시장일','시가총액','단위','출처','수집시각','비교수집일','비교시총','시총증감','등락률(%)'),
             (1,'삼성전자','005930',None,400,'억원','https://stock.naver.com/','2026-10-28T08:30:00+09:00','2026-10-27',390,10,2.5641)]
         projected=presentation_tables(replace(context,tables=_freeze_tables(tables)))
-        lme=next(t for t in projected if '공식가격' in t['name'])
-        self.assertEqual(lme['rows'][0][1]['text'],'15,000 USD/t')
+        lme=next(t for t in projected if t['kind']=='metals')
+        self.assertIn('15,000 USD/t',[row[1]['text'] for row in lme['rows']])
         stock=next(t for t in projected if t['kind']=='stocks')
         self.assertEqual([c['text'] for c in stock['rows'][0][1:]],['70,000 원','69,000 원','+1,000 원','+1.4%'])
         cap=next(t for t in projected if t['kind']=='caps')

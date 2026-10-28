@@ -148,7 +148,7 @@ def _latest_caps(rows):
 def presentation_tables(context):
     """Semantic display cells, grouped by actual date; never changes context."""
     tables = []
-    for (day,),rows in _groups(_records(context,'보고용_금속시세'),'고시일'):
+    for (day,),rows in _groups(_records(context,'보고용_금속시세')+_records(context,'보고용_SMM'),'고시일'):
         body = []
         for row in rows:
             unit = str(row.get('단위') or '단위 미확인')
@@ -161,10 +161,13 @@ def presentation_tables(context):
                 source = 'https://dashboard.fastmarkets.com/w/'+context.workspace_id+'/'
             cell = _name(row.get('품목명'),source,note)
             cell['detail'] = row.get('원본 조건') or ''
+            cell['series_key'] = (row.get('코드'),row.get('단위'),row.get('구분'))
             body.append([cell,_value(row.get('Mid'),percent='%' in unit,unit=unit)])
         tables.append(_table('metals','금속 가격 ('+_day(day)+')','',('품목','가격'),body))
     for (day,),rows in _groups(_records(context,'보고용_LME'),'고시일'):
         body = [[_name(r['금속']+(' 현물' if r['계약']=='Cash' else ' 3개월물'),r.get('출처')),_value(r.get('가격'),unit=r.get('단위'))] for r in rows]
+        for item,r in zip(body,rows):
+            item[0]['series_key']=('LME_'+{'니켈':'NI','구리':'CU','코발트':'CO'}[r['금속']]+'_'+('CASH' if r['계약']=='Cash' else '3M')+'_ASK',r['단위'],'Official')
         tables.append(_table('metals','금속 공식가격 ('+_day(day)+')','Ask · 현물은 Official Settlement',('금속','가격'),body))
     for (day,),rows in _groups(_records(context,'보고용_환율'),'고시일'):
         body = []
@@ -211,6 +214,29 @@ def presentation_tables(context):
                 item += [_value(row.get('비교시총'),unit=unit),_value(row.get('시총증감'),signed=True,unit=unit),_value(row.get('등락률(%)'),percent=True,signed=True)]
             body.append(item)
         tables.append(_table('caps','시가총액'+(' · 수집 스냅샷' if capture else ' ('+_day(day)+')'),subtitle,headers,body))
+    # One metal surface. Dates belong to individual observations, not duplicate
+    # sections. Sources remain distinct instruments, never interchangeable prices.
+    metal_tables = [table for table in tables if table['kind']=='metals']
+    from metal_dashboard import dashboard_data
+    series = dashboard_data(context)['series']
+    metal_rows = []
+    for table in metal_tables:
+        day = table['name'].split('(',1)[-1].rstrip(')')
+        for row in table['rows']:
+            row.append(dict(text=day,href='',css='date',note=''))
+            metal_rows.append(row)
+    for row in metal_rows:
+        name = row[0]
+        key=name.get('series_key')
+        matches = [s for s in series if
+                   ((key and (s['code'],s['unit'],s['mode'])==key) or (not key and s['name']==name['text'])) and
+                   (not name.get('href') or safe_url(s.get('source_url'))==name['href'])]
+        if len(matches)==1 and matches[0]['points']:
+            name['history'] = matches[0]
+    tables = [t for t in tables if t['kind']!='metals']
+    if metal_rows:
+        tables.insert(0,_table('metals','금속 가격','품목을 누르면 저장된 가격 추이를 확인할 수 있습니다.',
+                              ('품목','가격','고시일'),metal_rows))
     order = {'metals':0,'fx':1,'market':2,'caps':3,'stocks':4}
     tables.sort(key=lambda table:order[table['kind']])
     names = {str(r.get('코드')):r.get('종목명') for r in cap_report+raw_caps+_records(context,'보고용_주가')}
