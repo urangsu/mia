@@ -41,7 +41,8 @@ def export_html(context,path):
                 cells.append(dict(text=display_value(value),css=css))
             body.append(cells)
         audit_tables.append(dict(name=name,headers=rows[0],rows=body))
-    rendered=env.get_template('report_template.html').render(context=context,
+    from market_domains import rate_cards
+    rendered=env.get_template('report_template.html').render(context=context,rate_cards=rate_cards(context),
         tables=presentation_tables(context),audit_tables=audit_tables,
         capture_label=capture_label([context.as_of]))
     _atomic(path,lambda p:p.write_text(rendered,encoding='utf-8'))
