@@ -201,6 +201,11 @@ def run_collection(settings,browser,cancelled,logger=print):
             if checkpoint():return output
 
             def csv():
+                from market_domains import initialize
+                import sqlite3
+                from contextlib import closing
+                with closing(sqlite3.connect(db)) as cx, cx:
+                    initialize(cx)
                 if settings.get('fmb_enabled',True):core.export_files(folder)
                 if settings.get('smm_enabled',False):
                     from smm_public import export_csv
