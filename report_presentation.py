@@ -7,6 +7,7 @@ import re
 
 KST = timezone(timedelta(hours=9))
 LABELS = {'KOSPI':'코스피','KOSDAQ':'코스닥','SP500':'S&P 500','NASDAQ':'나스닥',
+          'KR3Y':'한국 국고채 3년','KR_CORP_AA_3Y':'회사채 3년 AA−',
           'US10Y':'미국 국채 10년','KR10Y':'한국 국채 10년','GOLD':'금 선물','WTI':'WTI 원유'}
 
 
@@ -248,3 +249,60 @@ def presentation_tables(context):
             body.append([_name(label,row.get('출처')),_value(row.get('수치'),percent='%' in unit,unit=unit)])
         tables.append(_table('overview','종합 ('+_day(day)+')','',('항목','수치'),body,overview=True))
     return tables
+
+
+def equity_table(context):
+    caps=_records(context,'보고용_시총') or _latest_caps(_records(context,'증시_시총스냅샷'))
+    stocks=_records(context,'보고용_주가')
+    body=[]
+    for cap in caps:
+        code=str(cap.get('코드') or '')
+        matches=[s for s in stocks if code and str(s.get('코드'))==code
+                 and cap.get('시장일') and s.get('시장일')==cap['시장일']]
+        if not cap.get('시장일') and cap.get('수집시각'):
+            cutoff=str(cap['수집시각'])[:10]
+            candidates=[s for s in stocks if str(s.get('코드'))==code and s.get('시장일') and s['시장일']<cutoff]
+            day=max((s['시장일'] for s in candidates),default='')
+            matches=[s for s in candidates if s['시장일']==day]
+        stock=matches[0] if len(matches)==1 else {}
+        change=_value(stock.get('전일대비'),signed=True,unit='원')
+        if _number(stock.get('등락률(%)')) is not None:
+            change['text']+=' ('+percentage(stock['등락률(%)'])+')'
+        body.append([_value(cap.get('순위')),_name(cap.get('종목명'),cap.get('출처')),
+            _value(cap.get('시가총액'),unit=cap.get('단위') or ''),_value(stock.get('수치'),unit='원'),change])
+    return _table('caps','주가·시가총액','시총은 수집 스냅샷 · 주가는 확인된 기준일 종가 (실시간 주가 아님)',
+        ('순위','종목','시가총액','주가','등락(등락률)'),body)
+
+
+def html_tables(context):
+    tables=presentation_tables(context)
+    result=[t for t in tables if t['kind'] not in ('caps','stocks')]
+    bond_labels={'미국 국채 10년','한국 국채 10년','한국 국고채 3년','회사채 3년 AA−'}
+    for table in result:
+        if table['kind']=='metals':
+            table['rows']=order_metal_rows(table['rows'])
+            table['subtitle']='Ni → Co → LC → Mn · 좌우로 스크롤해 Payable·기타 시세 보기 · 품목을 누르면 하단 추이'
+        if table['kind']=='market':
+            table['rows']=[r for r in table['rows'] if r[0]['text'] not in bond_labels]
+    combined=equity_table(context)
+    if combined['rows']:result.append(combined)
+    return result
+
+
+def metal_priority(name):
+    text=str(name).casefold()
+    if any(s in text for s in ('payable','블랙매스','black mass')):return 5
+    for rank,words in enumerate((('니켈','nickel'),('코발트','cobalt'),('탄산리튬','lithium carbonate'),('망간','manganese'))):
+        if any(word in text for word in words):return rank
+    return 4
+
+
+def order_metal_rows(rows):
+    ordered=sorted(rows,key=lambda row:metal_priority(row[0]['text']))
+    leaders=[];rest=[];seen=set()
+    for row in ordered:
+        priority=metal_priority(row[0]['text'])
+        if priority<4 and priority not in seen:
+            leaders.append(row);seen.add(priority)
+        else:rest.append(row)
+    return leaders+rest
