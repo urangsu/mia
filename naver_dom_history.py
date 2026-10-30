@@ -22,6 +22,8 @@ INDEX_PATHS = {
     'WTI': '/marketindex/energy/CLcv1/price',
     'US10Y': '/marketindex/bond/US10YT=RR/price',
     'KR10Y': '/marketindex/bond/KR10YT=RR/price',
+    'KR3Y': '/marketindex/bond/KR3YT=RR/price',
+    'KR_CORP_AA_3Y': '/marketindex/domesticInterest/KFIA103009/price',
 }
 
 
@@ -85,7 +87,7 @@ def parse_daily_history(html, instrument_id, source_url, captured_at=None, equit
         return {'rows': [], 'warnings': ['GOLD: explicit USD/ounce recent-contract unit required']}
     if instrument_id == 'WTI' and (currency != 'USD' or unit not in ('USD/bbl', 'USD/BBL', 'USD/배럴')):
         return {'rows': [], 'warnings': ['WTI: explicit USD/barrel recent-contract unit required']}
-    if instrument_id in ('US10Y', 'KR10Y') and (unit != '%' or currency is not None):
+    if instrument_id in ('US10Y', 'KR10Y','KR3Y','KR_CORP_AA_3Y') and (unit != '%' or currency is not None):
         return {'rows': [], 'warnings': [instrument_id + ': explicit percent government-bond yield unit required']}
     try:
         captured = datetime.now(KST) if captured_at is None else (
@@ -141,10 +143,13 @@ def parse_daily_history(html, instrument_id, source_url, captured_at=None, equit
             elif instrument_id == 'WTI':
                 provenance.update(table_source='NAVER NYMEX WTI선물 최근월물 일별 시세',
                                   contract_code='CLcv1', price_type='recent_contract_futures')
-            elif instrument_id in ('US10Y', 'KR10Y'):
+            elif instrument_id in ('US10Y', 'KR10Y','KR3Y','KR_CORP_AA_3Y'):
                 country = '미국' if instrument_id == 'US10Y' else '한국'
                 provenance.update(table_source='NAVER '+country+' 국채10년 수익률 일별 시세',
                                   price_type='government_bond_yield')
+                if instrument_id=='KR3Y':provenance['table_source']='NAVER 한국 국채3년 수익률 일별 시세'
+                if instrument_id=='KR_CORP_AA_3Y':
+                    provenance.update(table_source='NAVER 금융투자협회 회사채3년 AA- 일별 시세',price_type='corporate_bond_yield')
             observation = dict(market_date=market_date, captured_at=captured_text,
                 change=None, pct=None, unit='원' if equity else (unit or '포인트'),
                 currency='KRW' if equity else currency, status='stale', source_url=source_url,

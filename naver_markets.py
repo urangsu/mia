@@ -28,6 +28,8 @@ PAGES = (
     ('history:NASDAQ', 'https://stock.naver.com/worldstock/index/.IXIC/price'),
     ('history:US10Y', 'https://stock.naver.com/marketindex/bond/US10YT=RR/price'),
     ('history:KR10Y', 'https://stock.naver.com/marketindex/bond/KR10YT=RR/price'),
+    ('history:KR3Y', 'https://stock.naver.com/marketindex/bond/KR3YT=RR/price'),
+    ('history:KR_CORP_AA_3Y', 'https://stock.naver.com/marketindex/domesticInterest/KFIA103009/price'),
     ('history:GOLD', 'https://stock.naver.com/marketindex/metals/GCcv1/price'),
     ('history:WTI', 'https://stock.naver.com/marketindex/energy/CLcv1/price'),
 )
@@ -454,7 +456,7 @@ def collect(driver, cancelled, logger=print, force=False):
                 if history:
                     from naver_dom_history import parse_daily_history
                     code = kind.split(':',1)[1]
-                    unit = '%' if code in ('US10Y','KR10Y') else 'USD/oz' if code=='GOLD' else 'USD/bbl' if code=='WTI' else None
+                    unit = '%' if code in ('US10Y','KR10Y','KR3Y','KR_CORP_AA_3Y') else 'USD/oz' if code=='GOLD' else 'USD/bbl' if code=='WTI' else None
                     currency = 'USD' if code in ('GOLD','WTI') else None
                     name=next((r.get('name') for r in result['equities'] if r['stock_code']==code and r.get('name')),
                               'POSCO홀딩스' if code=='005490' else '')
@@ -496,7 +498,7 @@ def collect(driver, cancelled, logger=print, force=False):
             codes={r['stock_code'] for r in result['equities'] if is_verified_close(r)}
             ranks={r['rank'] for r in result['equities'] if is_verified_close(r) and r.get('market_cap') is not None
                    and json.loads(r.get('raw_json') or '{}').get('market_cap_unit')}
-            complete=ids==set(INDICATORS) and set(range(1,11))<=ranks and '005490' in codes
+            complete=set(INDICATORS)<=ids and set(range(1,11))<=ranks and '005490' in codes
             result['status']='complete' if complete else 'partial'
             if not result['indicators'] and not result['equities']:
                 result['status']='failed'
