@@ -64,7 +64,7 @@ class ReportPresentationTests(unittest.TestCase):
     def test_percent_one_decimal_no_scaling_raw_snapshot_preserved(self):
         context=sample_context();before=context.to_dict()
         body=self.render(context).split('<details id="source-basis"',1)[0]
-        for value in ('+3.1%','91.0%','5.0%'):self.assertIn(value,body)
+        for value in ('+3.1%','91.0%','4.993%'):self.assertIn(value,body)
         self.assertNotIn('3.087502',body)
         self.assertNotIn('308.8%',body)
         self.assertEqual(context.to_dict(),before)

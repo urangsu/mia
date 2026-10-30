@@ -1,5 +1,16 @@
 /* Self-contained stored-observation chart. No fetch, external library or interpolation. */
 (function(){
+  document.querySelectorAll('table.metals').forEach(function(table){
+    var rows=Array.from(table.querySelectorAll(':scope > tbody > .history-row'));
+    if(!rows.length)return;
+    var host=document.createElement('table');host.className='history-host';
+    host.setAttribute('aria-label','선택한 금속 가격 이력');
+    var body=document.createElement('tbody');host.appendChild(body);
+    rows.forEach(function(row){body.appendChild(row);});
+    table.parentElement.insertAdjacentElement('afterend',host);
+  });
+})();
+(function(){
   'use strict';
   function format(value,unit){
     if(value===null || !Number.isFinite(value))return '—';

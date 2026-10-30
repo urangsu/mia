@@ -27,7 +27,7 @@ def _atomic(path,writer):
 
 def export_html(context,path):
     from jinja2 import Environment,FileSystemLoader,select_autoescape
-    from report_presentation import presentation_tables,capture_label
+    from report_presentation import html_tables,capture_label
     env=Environment(loader=FileSystemLoader(Path(__file__).parent),autoescape=select_autoescape(['html']))
     audit_tables=[]
     for name,rows in context.tables.items():
@@ -43,7 +43,7 @@ def export_html(context,path):
         audit_tables.append(dict(name=name,headers=rows[0],rows=body))
     from market_domains import rate_cards
     rendered=env.get_template('report_template.html').render(context=context,rate_cards=rate_cards(context),
-        tables=presentation_tables(context),audit_tables=audit_tables,
+        tables=html_tables(context),audit_tables=audit_tables,
         capture_label=capture_label([context.as_of]))
     _atomic(path,lambda p:p.write_text(rendered,encoding='utf-8'))
     return str(path)
