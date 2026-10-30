@@ -5,6 +5,25 @@ from unittest.mock import patch
 
 
 class SourceBundleTests(unittest.TestCase):
+    def test_dom_archive_is_unpacked_inside_combined_restore(self):
+        import scripts.build_source_bundle as builder
+        root=Path(__file__).parent
+        archive=(root/'tools/MIA_DOM_Inspector_V4/MIA_DOM_ARCHIVE_V4.txt').read_bytes()
+        files={'MIA_Collector.py':b'launcher','RUN_GUI.cmd':b'gui','requirements.txt':b'',
+            'requirements-desktop.txt':b'', 'bring_in/MIA_COMPANY_SETUP_GUIDE_KO.txt':b'guide',
+            'tools/MIA_DOM_Inspector_V4/MIA_DOM_ARCHIVE_V4.txt':archive}
+        layout=builder.company_layout(files)
+        import json
+        manifest=json.loads(layout['DOM_확장/manifest.json'])
+        self.assertEqual(manifest['version'],'4.0.0')
+        self.assertIn('DOM_확장/multi_picker.js',layout)
+        self.assertEqual(len([n for n in layout if n.startswith('DOM_확장/')]),14)
+        with tempfile.TemporaryDirectory() as temp:
+            result=builder.write_bundle(layout,'d'*40,Path(temp)/'kit')
+            from bring_in.RESTORE_LATEST_SOURCE import restore_source
+            restore_source(result['txt'],Path(temp)/'restored')
+            self.assertEqual((Path(temp)/'restored/DOM_확장/manifest.json').read_bytes(),layout['DOM_확장/manifest.json'])
+
     def test_company_layout_is_one_clean_root_with_unchanged_internal_source(self):
         import scripts.build_source_bundle as builder
         self.assertTrue(hasattr(builder, 'company_layout'), 'clean company layout missing')

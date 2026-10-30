@@ -8,6 +8,7 @@ from pathlib import Path
 import subprocess
 import sys
 import zipfile
+import tarfile
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from bring_in.RESTORE_LATEST_SOURCE import FORMAT,safe_path
@@ -29,6 +30,28 @@ def company_layout(files):
         safe_path(name)
     layout = {'app/' + name: content for name, content in files.items()}
     layout.update({name: files[source] for name, source in visible.items()})
+    archive=files.get('tools/MIA_DOM_Inspector_V4/MIA_DOM_ARCHIVE_V4.txt')
+    if archive is not None:
+        lines=archive.decode('utf-8').splitlines()
+        if len(lines)!=2:raise ValueError('DOM source archive format')
+        meta=json.loads(lines[0]);raw=base64.b64decode(lines[1],validate=True)
+        if (meta.get('format')!='mia-text-tarxz-v1' or meta.get('project')!='dom'
+            or len(raw)!=meta.get('archive_bytes') or sha256(raw).hexdigest()!=meta.get('sha256')):
+            raise ValueError('DOM source archive integrity')
+        with tarfile.open(fileobj=io.BytesIO(raw),mode='r:xz') as source:
+            members=source.getmembers()
+            if len(members)!=meta.get('files') or len(members)>100 or sum(m.size for m in members)>5*1024*1024:
+                raise ValueError('DOM source archive bounds')
+            seen=set()
+            for member in members:
+                safe_path(member.name)
+                if not member.isfile() or member.name.casefold() in seen:raise ValueError('DOM unsafe member')
+                seen.add(member.name.casefold())
+                stream=source.extractfile(member)
+                layout['DOM_확장/'+member.name]=stream.read()
+        manifest=json.loads(layout.get('DOM_확장/manifest.json',b'{}'))
+        if manifest.get('manifest_version')!=3 or manifest.get('version')!='4.0.0':raise ValueError('DOM manifest mismatch')
+        if 'DOM_확장/multi_picker.js' not in layout:raise ValueError('DOM picker missing')
     return layout
 
 
