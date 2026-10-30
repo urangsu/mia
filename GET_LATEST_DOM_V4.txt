@@ -1,3 +1,11 @@
+최신 안내 (2026-10-30): DOM V4 원본이 tools/MIA_DOM_Inspector_V4에 반영됐습니다.
+이제 bring_in/MIA_SOURCE_CURRENT.txt + RESTORE_LATEST_SOURCE.py 두 파일로
+콜렉터와 DOM 확장을 함께 복원합니다. 별도 DOM TXT 반입이 필요 없습니다.
+복원 후 매크로\MIA_Collector_Update\DOM_확장 폴더를 chrome://extensions의
+개발자 모드 → 압축해제된 확장 프로그램 로드에서 선택하세요.
+사용법과 데이터 보존 안내: bring_in/MIA_COMPANY_SETUP_GUIDE_KO.txt
+
+아래는 과거 반입 방식의 역사적 기록이며 현재 설치 절차가 아닙니다.
 MIA DOM Inspector V4 - SUPT 방식 TXT 오프라인 복원
 날짜: 2026-10-23
 
