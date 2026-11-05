@@ -113,6 +113,43 @@ def _value(value, *, percent=False,signed=False,unit=''):
         text += ' '+suffix
     return dict(text=text,css=css,href='',note='')
 
+def _cap_value(value, unit, *, signed=False):
+    number = _number(value)
+    unit = str(unit or '').strip()
+    scale = {'억원': Decimal('10000'), '원': Decimal('1e12'), 'KRW': Decimal('1e12'),
+             '조원': Decimal(1)}.get(unit)
+    if number is None or not unit or unit == '미확인':
+        return _value(None)
+    if scale is None:
+        return _value(number, unit=unit, signed=signed)
+    converted = number / scale
+    cell = _value(converted, unit='조원', signed=signed)
+    rounded = converted.quantize(Decimal('.01'), rounding=ROUND_HALF_UP)
+    if converted and not rounded:
+        cell['text'] = ('−' if converted < 0 else '+' if signed else '') + '<0.01 조원'
+    else:
+        cell['text'] = format(abs(rounded) if not rounded else rounded, '+,.2f' if signed and rounded else ',.2f') + ' 조원'
+    return cell
+
+def _cobalt_scale(label, unit):
+    if metal_priority(label) != 1:
+        return None
+    unit = str(unit or '').lower().replace(' ', '')
+    if unit in ('usd/lb', '$/lb'):
+        return Decimal('0.45359237')
+    if unit in ('usd/t', '$/t', 'usd/tonne', '$/tonne', 'usd/mt', '$/mt'):
+        return Decimal(1000)
+    if unit in ('usd/kg', '$/kg'):
+        return Decimal(1)
+    return None
+
+def _metal_value(label, value, unit):
+    scale = _cobalt_scale(label, unit)
+    number = _number(value)
+    if scale is not None:
+        return _value(number / scale if number is not None else None, unit='$/kg')
+    return _value(value, percent='%' in str(unit), unit=unit)
+
 
 def _table(kind,title,subtitle,headers,rows, *, overview=False):
     return dict(kind=kind,name=title,subtitle=subtitle,headers=headers,rows=rows,overview=overview)
@@ -163,10 +200,10 @@ def presentation_tables(context):
             cell = _name(row.get('품목명'),source,note)
             cell['detail'] = row.get('원본 조건') or ''
             cell['series_key'] = (row.get('코드'),row.get('단위'),row.get('구분'))
-            body.append([cell,_value(row.get('Mid'),percent='%' in unit,unit=unit)])
+            body.append([cell,_metal_value(cell['text'],row.get('Mid'),unit)])
         tables.append(_table('metals','금속 가격 ('+_day(day)+')','',('품목','가격'),body))
     for (day,),rows in _groups(_records(context,'보고용_LME'),'고시일'):
-        body = [[_name(r['금속']+(' 현물' if r['계약']=='Cash' else ' 3개월물'),r.get('출처')),_value(r.get('가격'),unit=r.get('단위'))] for r in rows]
+        body = [[_name(r['금속']+(' 현물' if r['계약']=='Cash' else ' 3개월물'),r.get('출처')),_metal_value(r['금속'],r.get('가격'),r.get('단위'))] for r in rows]
         for item,r in zip(body,rows):
             item[0]['series_key']=('LME_'+{'니켈':'NI','구리':'CU','코발트':'CO'}[r['금속']]+'_'+('CASH' if r['계약']=='Cash' else '3M')+'_ASK',r['단위'],'Official')
         tables.append(_table('metals','금속 공식가격 ('+_day(day)+')','Ask · 현물은 Official Settlement',('금속','가격'),body))
@@ -233,7 +270,15 @@ def presentation_tables(context):
                    ((key and (s['code'],s['unit'],s['mode'])==key) or (not key and s['name']==name['text'])) and
                    (not name.get('href') or safe_url(s.get('source_url'))==name['href'])]
         if len(matches)==1 and matches[0]['points']:
-            name['history'] = matches[0]
+            history = matches[0]
+            scale = _cobalt_scale(name['text'], history['unit'])
+            if scale is not None:
+                points = []
+                for point in history['points']:
+                    number = _number(point['value'])
+                    points.append(dict(point, value=float(number / scale) if number is not None else None))
+                history = dict(history, points=points, unit='$/kg')
+            name['history'] = history
     tables = [t for t in tables if t['kind']!='metals']
     if metal_rows:
         tables.insert(0,_table('metals','금속 가격','품목을 누르면 저장된 가격 추이를 확인할 수 있습니다.',
@@ -246,7 +291,8 @@ def presentation_tables(context):
         for row in rows:
             label = names.get(str(row.get('종목'))) or LABELS.get(row.get('종목'),row.get('종목'))
             unit = row.get('단위') or ''
-            body.append([_name(label,row.get('출처')),_value(row.get('수치'),percent='%' in unit,unit=unit)])
+            value = _cap_value(row.get('수치'),unit) if row.get('구분')=='시총' else _value(row.get('수치'),percent='%' in unit,unit=unit)
+            body.append([_name(label,row.get('출처')),value])
         tables.append(_table('overview','종합 ('+_day(day)+')','',('항목','수치'),body,overview=True))
     return tables
 
@@ -254,7 +300,7 @@ def presentation_tables(context):
 def equity_table(context):
     caps=_records(context,'보고용_시총') or _latest_caps(_records(context,'증시_시총스냅샷'))
     stocks=_records(context,'보고용_주가')
-    body=[]
+    body=[];stock_days=set()
     for cap in caps:
         code=str(cap.get('코드') or '')
         matches=[s for s in stocks if code and str(s.get('코드'))==code
@@ -265,12 +311,23 @@ def equity_table(context):
             day=max((s['시장일'] for s in candidates),default='')
             matches=[s for s in candidates if s['시장일']==day]
         stock=matches[0] if len(matches)==1 else {}
+        if stock and _number(stock.get('수치')) is not None:
+            stock_days.add(stock['시장일'])
         change=_value(stock.get('전일대비'),signed=True,unit='원')
         if _number(stock.get('등락률(%)')) is not None:
             change['text']+=' ('+percentage(stock['등락률(%)'])+')'
         body.append([_value(cap.get('순위')),_name(cap.get('종목명'),cap.get('출처')),
-            _value(cap.get('시가총액'),unit=cap.get('단위') or ''),_value(stock.get('수치'),unit='원'),change])
-    return _table('caps','주가·시가총액','시총은 수집 스냅샷 · 주가는 확인된 기준일 종가 (실시간 주가 아님)',
+            _cap_value(cap.get('시가총액'),cap.get('단위')),_value(stock.get('수치'),unit='원'),change])
+    cap_days=sorted({str(r['시장일']) for r in caps if r.get('시장일')})
+    cap_basis=capture_label(r.get('수집시각') for r in caps)
+    if cap_basis!='수집시각 미확인':
+        cap_basis='시총 '+cap_basis+' (스냅샷)'
+    elif cap_days:
+        cap_basis='시총 기준일 '+', '.join(map(_day,cap_days))
+    else:
+        cap_basis='시총 기준일 미확인'
+    stock_basis='주가 종가 '+', '.join(map(_day,sorted(stock_days))) if stock_days else '주가 종가 미확인'
+    return _table('caps','주가·시가총액',cap_basis+' · '+stock_basis,
         ('순위','종목','시가총액','주가','등락(등락률)'),body)
 
 
@@ -281,12 +338,25 @@ def html_tables(context):
     for table in result:
         if table['kind']=='metals':
             table['rows']=order_metal_rows(table['rows'])
-            table['subtitle']='Ni → Co → LC → Mn · 좌우로 스크롤해 Payable·기타 시세 보기 · 품목을 누르면 하단 추이'
+            table['subtitle']='좌우로 다른 품목 보기 · 저장 이력이 있는 품목을 선택하면 가격 추이가 열립니다.'
         if table['kind']=='market':
             table['rows']=[r for r in table['rows'] if r[0]['text'] not in bond_labels]
+        for row in table['rows']:
+            row[0]['icon'] = indicator_icon(table['kind'], row[0]['text'])
     combined=equity_table(context)
     if combined['rows']:result.append(combined)
     return result
+
+
+def indicator_icon(kind, label):
+    if kind == 'fx':
+        return {'USD':'us','EUR':'eu','JPY':'jp','CNH':'cn','CNY':'cn','GBP':'gb'}.get(label,'fx')
+    if kind == 'metals':
+        return {2:'lithium',5:'recycle'}.get(metal_priority(label),'metal')
+    if kind == 'market':
+        return {'코스피':'kr','코스닥':'kr','S&P 500':'us','나스닥':'us',
+                '금 선물':'gold','WTI 원유':'oil'}.get(label,'index')
+    return ''
 
 
 def metal_priority(name):

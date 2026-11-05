@@ -11,5 +11,6 @@ class EquityTests(unittest.TestCase):
         self.assertEqual(table['headers'],('순위','종목','시가총액','주가','등락(등락률)'))
         self.assertEqual(table['rows'][0][3]['text'],'110 원')
         self.assertEqual(table['rows'][0][4]['text'],'+10 원 (+10.0%)')
+        self.assertIn('시총 기준일 2026.10.29 · 주가 종가 2026.10.29',table['subtitle'])
         context.tables['보고용_주가'][1]=('합성기업','005930','2026-10-28',99,1,1,'원')
         self.assertEqual(equity_table(context)['rows'][0][3]['text'],'—')
