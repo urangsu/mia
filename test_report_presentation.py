@@ -30,6 +30,44 @@ def sample_context():
 
 
 class ReportPresentationTests(unittest.TestCase):
+    def test_reader_market_cap_is_in_trillions_but_audit_is_unchanged(self):
+        body,audit=self.render().split('<details id="source-basis"',1)
+        self.assertIn('1,413.34 조원',body)
+        self.assertNotIn('14,133,379 억원',body)
+        self.assertIn('14,133,379',audit)
+
+    def test_cobalt_card_and_history_convert_together_without_mutating_input(self):
+        from unittest.mock import patch
+        from report_presentation import html_tables
+        context=sample_context();tables=dict(context.tables)
+        tables['보고용_금속시세'] += (('코발트 현물','2026-10-27',16.85,'USD/lb','Actual','https://example.org/','MB-CO-TEST','코발트',''),)
+        raw=dict(code='MB-CO-TEST',unit='USD/lb',mode='Actual',name='코발트 현물',
+                 source_url='https://example.org/',points=[dict(date='2026-10-27',value=16.85),dict(date='2026-10-26',value=None)])
+        with patch('metal_dashboard.dashboard_data',return_value={'series':[raw]}):
+            metal=next(t for t in html_tables(replace(context,tables=_freeze_tables(tables))) if t['kind']=='metals')
+        cobalt=next(row for row in metal['rows'] if row[0]['text']=='코발트 현물')
+        self.assertEqual(cobalt[1]['text'],'37.15 $/kg')
+        self.assertEqual(cobalt[0]['history']['unit'],'$/kg')
+        self.assertAlmostEqual(cobalt[0]['history']['points'][0]['value'],16.85/0.45359237)
+        self.assertIsNone(cobalt[0]['history']['points'][1]['value'])
+        self.assertEqual(raw['points'][0]['value'],16.85)
+        self.assertEqual(raw['unit'],'USD/lb')
+
+    def test_market_dashboard_renders_offline_icons_and_grouped_panels(self):
+        html=self.render()
+        self.assertIn('class="market-board"',html)
+        self.assertIn('href="#icon-jp"',html)
+        self.assertIn('href="#icon-us"',html)
+        self.assertIn('href="#icon-lithium"',html)
+        self.assertIn('aria-controls="metal-rail"',html)
+        self.assertIn('prefers-reduced-motion',html)
+        self.assertNotIn('<script src=',html)
+
+    def test_chart_exposes_axes_and_inspectable_focus_readout(self):
+        html=self.render()
+        self.assertIn('history-axis',html)
+        self.assertIn('history-tooltip',html)
+
     def render(self, context=None):
         from report_exports import export_html
         with tempfile.TemporaryDirectory() as folder:
