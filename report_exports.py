@@ -25,7 +25,7 @@ def _atomic(path,writer):
     finally:
         if temporary.exists():temporary.unlink()
 
-def export_html(context,path):
+def export_html(context,path,*,briefing=None):
     from jinja2 import Environment,FileSystemLoader,select_autoescape
     from report_presentation import html_tables,capture_label
     env=Environment(loader=FileSystemLoader(Path(__file__).parent),autoescape=select_autoescape(['html']))
@@ -44,7 +44,7 @@ def export_html(context,path):
     from market_domains import rate_cards
     rendered=env.get_template('report_template.html').render(context=context,rate_cards=rate_cards(context),
         tables=html_tables(context),audit_tables=audit_tables,
-        capture_label=capture_label([context.as_of]))
+        capture_label=capture_label([context.as_of]),briefing=briefing or {})
     _atomic(path,lambda p:p.write_text(rendered,encoding='utf-8'))
     return str(path)
 
@@ -134,7 +134,7 @@ def export_excel(context,path,*,accumulation=False):
         _atomic(path,wb.save)
     return str(path)
 
-def export_reports(context,output_dir,*,include_excel=False):
+def export_reports(context,output_dir,*,include_excel=False,briefing=None):
     """Keep each successful artifact even when another renderer/Excel fails.
 
     Successful calls retain the existing format:path contract. Partial calls add
@@ -143,7 +143,7 @@ def export_reports(context,output_dir,*,include_excel=False):
     """
     output_dir=Path(output_dir);output_dir.mkdir(parents=True,exist_ok=True)
     prefix='report_'+context.snapshot_id[:16]
-    jobs=[('html',output_dir/(prefix+'.html'),lambda path:export_html(context,path)),
+    jobs=[('html',output_dir/(prefix+'.html'),lambda path:export_html(context,path,briefing=briefing) if briefing else export_html(context,path)),
           ('pptx',output_dir/(prefix+'.pptx'),lambda path:export_pptx(context,path)),
           ('context',output_dir/(prefix+'_context.json'),
            lambda path:_atomic(path,lambda p:p.write_text(canonical_json(context.to_dict()),encoding='utf-8')))]

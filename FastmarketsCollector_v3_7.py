@@ -13,6 +13,8 @@ def main(argv=None):
     p.add_argument('--days',type=int)
     p.add_argument('--data-dir');p.add_argument('--workbook');p.add_argument('--report-dir')
     p.add_argument('--start');p.add_argument('--end');p.add_argument('--series')
+    p.add_argument('--public-briefing',action='store_true',
+                   help='--reports-only에서 공개 발행물 링크 추가; 별도 모델 설정이 없으면 요약은 생략')
     p.add_argument('--with-fx',action='store_true',help='v3.6 호환; v3.7 전체 실행에 SMBS가 기본 포함됩니다')
     p.add_argument('--naver-force',action='store_true',default=None)
     p.add_argument('--no-naver',action='store_true',default=None)
@@ -26,6 +28,8 @@ def main(argv=None):
     p.add_argument('--schedule-status',action='store_true')
     p.add_argument('--unschedule',action='store_true')
     args=p.parse_args(argv)
+    if args.public_briefing and not args.reports_only:
+        p.error('--public-briefing은 --reports-only와 함께 사용하세요.')
     if args.days is not None and not 0<=args.days<=3650:p.error('--days 범위는 0~3650입니다')
     if args.diagnose:
         from diagnose_windows import main as diagnose
@@ -42,7 +46,7 @@ def main(argv=None):
         if value is not None:settings[key]=value
     settings.update(report_start=args.start,report_end=args.end,
                     report_series=args.series.split(',') if args.series else None,
-                    reports_only=args.reports_only)
+                    reports_only=args.reports_only,public_briefing=args.public_briefing)
     if args.no_naver is not None:settings['naver_enabled']=not args.no_naver
     if args.naver_force is not None:settings['naver_force']=args.naver_force
     if args.public_only:settings.update(fmb_enabled=False,fx_enabled=False,lme_enabled=False,smm_enabled=False,naver_enabled=True,fdr_enabled=False)

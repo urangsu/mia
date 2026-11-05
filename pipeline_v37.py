@@ -65,9 +65,18 @@ def export_only(settings,*,_lock_held=False):
                 output['workbook']=str(report_exports.export_excel(context,target,accumulation=True))
         except Exception as exc:
             output['warnings'].append('누적 Excel 갱신 실패: '+str(exc))
+    extra={}
+    if reports_only and settings.get('public_briefing'):
+        try:
+            from market_briefing import collect_briefing
+            briefing=collect_briefing(context)
+            extra['briefing']=briefing
+            output['briefing']={'links':len(briefing['links']),'summary':bool(briefing['summary']),'catalog':briefing['catalog']}
+        except Exception:
+            output['briefing']={'links':0,'summary':False,'status':'unavailable'}
     try:
         output['reports']=report_exports.export_reports(context,
-            Path(settings.get('report_dir') or folder/'reports').expanduser(),include_excel=True)
+            Path(settings.get('report_dir') or folder/'reports').expanduser(),include_excel=True,**extra)
         errors=output['reports'].pop('errors',{})
         output['warnings'].extend(f'{kind} 보고서 출력 실패: {error}' for kind,error in errors.items())
     except Exception as exc:
