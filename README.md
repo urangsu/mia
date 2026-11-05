@@ -22,6 +22,7 @@ PPTX 보고서로 만드는 Windows 업무 도구입니다. 현재는 회사 실
 - FDR/Yahoo: 선택 사항, 새 설정의 기본 꺼짐. 기존 설정은 자동 덮어쓰지 않음.
 - 운영 Excel/ECM: 금속·환율만. 주가·지수·시총은 자료·보고서에서만 표시.
 - 화면 확인 내역은 기본 접힘. 출처·품질 근거는 내부/보고서에 보존.
+- HTML 보고서의 시총은 조원, USD 코발트 단가는 $/kg으로 표시합니다. 원본과 누적 Excel은 변경하지 않습니다.
 
 SMM/GFEX, LME Closing/유료 과거 이력, 미국 개별 주식 전체 순위는 미구현입니다.
 실제 공개 사이트 확인·DOM 재생 검증과 회사 Windows ChromeDriver/DRM Excel/ECM
@@ -40,6 +41,11 @@ py -3 MIA_Collector.py
 `FastmarketsCollector_v3_7.py`입니다. 구 실행기와 ONEFILE/PART는 archive로 보관했습니다.
 
 ## 이어 작업 / 검증
+
+HTML에 USGS 공식 발행물 링크를 추가하려면
+`py -3 MIA_Collector.py --reports-only --public-briefing`을 실행하세요.
+요약은 기본 꺼짐이며 모델이 없으면 HTML에 빈 요약 영역도 생기지 않습니다.
+[공개 브리핑 설정과 데이터 전송 범위](docs/PUBLIC_BRIEFING_KO.md)를 확인하세요.
 
 [AGENTS.md](AGENTS.md), [작업지시](docs/CODEX_WORK_ORDER.md),
 [수정 범위와 실사이트 확인](docs/COLLECTION_INSTALL_REPAIR_20261027.md),

@@ -1,6 +1,14 @@
 # UI reference summary
 
-Based on the user-provided Toss-securities-inspired DESIGN.md. This is a project-specific summary, not a claim of an official published design system.
+Based on the user-provided Toss Securities and Apple captures and the NAVER market screen. These are design references, not claims about native or authenticated product states.
+
+## HTML report
+
+- White canvas and quiet, dense tables: Toss WTS palette and square tabs; NAVER parallel FX/rates and asset icons.
+- Flat gray quote tiles and an explicit keyboard focus ring: restrained Apple-style hierarchy without marketing pills, gradients, glass, brand fonts or logos.
+- See [DESIGN.md](DESIGN.md) for applied tokens. These HTML presentation rules do not change the existing desktop theme.
+
+## Desktop app (unchanged)
 
 - Calm dark surfaces: #101013 base, #17171c body, #202025 panels.
 - Primary text #f3e9e9; secondary #a2a2ab; subtle border #35353f.
