@@ -5,7 +5,7 @@ Based on the user-provided Toss Securities and Apple captures and the NAVER mark
 ## HTML report
 
 - White canvas and quiet, dense tables: Toss WTS palette and square tabs; NAVER parallel FX/rates and asset icons.
-- Flat gray quote tiles and an explicit keyboard focus ring: restrained Apple-style hierarchy without marketing pills, gradients, glass, brand fonts or logos.
+- White quote tiles with thin neutral borders and an explicit keyboard focus ring. The equity table requests NAVER's public stock logos by ticker without copying the images into the repository. POSCO Holdings remains visible with unknown fields blank when its observation is unavailable.
 - See [DESIGN.md](DESIGN.md) for applied tokens. These HTML presentation rules do not change the existing desktop theme.
 
 ## Desktop app (unchanged)
