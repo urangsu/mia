@@ -42,7 +42,10 @@ def export_html(context,path,*,briefing=None):
             body.append(cells)
         audit_tables.append(dict(name=name,headers=rows[0],rows=body))
     from market_domains import rate_cards
-    rendered=env.get_template('report_template.html').render(context=context,rate_cards=rate_cards(context),
+    rates=rate_cards(context)
+    for card in rates:
+        if card.get('change','').startswith('-'):card['change']='△'+card['change'][1:]
+    rendered=env.get_template('report_template.html').render(context=context,rate_cards=rates,
         tables=html_tables(context),audit_tables=audit_tables,
         capture_label=capture_label([context.as_of]),briefing=briefing or {})
     _atomic(path,lambda p:p.write_text(rendered,encoding='utf-8'))
