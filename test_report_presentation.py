@@ -58,8 +58,8 @@ class ReportPresentationTests(unittest.TestCase):
         self.assertIn('class="market-board"',html)
         self.assertIn('href="#icon-jp"',html)
         self.assertIn('href="#icon-us"',html)
-        self.assertIn('href="#icon-lithium"',html)
-        self.assertIn('aria-controls="metal-rail"',html)
+        self.assertIn('class="metal-mark" aria-hidden="true">LC</span>',html)
+        self.assertIn('id="metal-grid"',html)
         self.assertIn('prefers-reduced-motion',html)
         self.assertNotIn('<script src=',html)
 
@@ -80,6 +80,15 @@ class ReportPresentationTests(unittest.TestCase):
         self.assertIn('id="theme-toggle"',html)
         self.assertLess(html.index('id="theme-toggle"'),html.index('<h1'))
         self.assertIn('aria-pressed="false"',html)
+
+    def test_secondary_details_have_visible_open_and_close_actions(self):
+        html=self.render()
+        for kind in ('overview','source-basis'):
+            with self.subTest(kind=kind):
+                summary=html.split('id="'+kind+'"',1)[1].split('</summary>',1)[0]
+                self.assertIn('class="disclosure-open">펼치기',summary)
+                self.assertIn('class="disclosure-close">접기',summary)
+                self.assertNotIn(' open',summary.split('>',1)[0])
 
     def test_all_warnings_and_raw_history_are_only_in_closed_bottom_details(self):
         html=self.render();body,audit=html.split('<details id="source-basis"',1)
@@ -109,7 +118,7 @@ class ReportPresentationTests(unittest.TestCase):
 
     def test_mixed_metal_dates_and_fx_100_jpy_basis_survive(self):
         body=self.render().split('<details id="source-basis"',1)[0]
-        for value in ('2026.10.21','2026.10.27','2026.10.26','원/100엔','$/kg'):
+        for value in ('2026.10.21','2026.10.27','2026.10.26','원/100¥','$/kg'):
             self.assertIn(value,body)
 
     def test_cap_snapshot_selects_latest_per_stock_not_history_or_duplicates(self):
@@ -166,8 +175,8 @@ class ReportPresentationTests(unittest.TestCase):
         self.assertEqual(metal['rows'][0][1]['text'],'13.7 $/kg')
         self.assertEqual(metal['rows'][0][0]['note'],'')
         fx=next(t for t in tables if t['kind']=='fx')
-        self.assertEqual(fx['rows'][0][1]['text'],'838.3 원/100엔')
-        self.assertEqual(fx['rows'][0][2]['text'],'-1.53 원/100엔')
+        self.assertEqual(fx['rows'][0][1]['text'],'838.3 원/100¥')
+        self.assertEqual(fx['rows'][0][2]['text'],'-1.53 원')
         market=next(t for t in tables if t['kind']=='market')
         kospi=next(r for r in market['rows'] if r[0]['text']=='코스피')
         self.assertEqual([c['text'] for c in kospi[1:]],['5,638.34 pt','5,469.47 pt','+168.87 pt','+3.1%'])
@@ -180,6 +189,14 @@ class ReportPresentationTests(unittest.TestCase):
         self.assertEqual(_value(5,percent=True,unit='%')['text'],'5.0%')
         self.assertEqual(_value(91,percent=True,unit='% payable')['text'],'91.0% payable')
         self.assertEqual(_value(70000,unit='KRW')['text'],'70,000 원')
+
+    def test_html_decrease_marker_does_not_change_source_values(self):
+        from report_presentation import html_tables, presentation_tables
+        context=sample_context()
+        fx=next(t for t in html_tables(context) if t['kind']=='fx')
+        self.assertEqual(fx['rows'][0][2]['text'],'△1.53 원')
+        raw=next(t for t in presentation_tables(context) if t['kind']=='fx')
+        self.assertEqual(raw['rows'][0][2]['text'],'-1.53 원')
 
     def test_lme_stock_and_cap_comparison_each_keep_their_own_units(self):
         from report_presentation import presentation_tables

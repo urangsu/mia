@@ -42,6 +42,8 @@ class MetalHistoryTests(unittest.TestCase):
             self.assertIn('1개월',main)
             self.assertIn('history-chart',main)
             self.assertIn('history-observations',main)
+            self.assertIn('class="history-close"',main)
+            self.assertIn('차트 접기',main)
 
 
 if __name__=='__main__':unittest.main()

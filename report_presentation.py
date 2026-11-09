@@ -95,7 +95,7 @@ def _display_unit(unit):
     basis = re.fullmatch(r'KRW/(\d+) (USD|EUR|JPY|CNH|CNY)',unit)
     if basis:
         amount,currency = basis.groups()
-        currency = {'USD':'달러','EUR':'유로','JPY':'엔','CNH':'위안','CNY':'위안'}[currency]
+        currency = {'USD':'$','EUR':'€','JPY':'¥','CNH':'CNH','CNY':'CNY'}[currency]
         return '원/'+('' if amount=='1' else amount)+currency
     return unit
 
@@ -214,7 +214,7 @@ def presentation_tables(context):
             if not source and row.get('출처') in ('SMBS','서울외국환중개'):
                 source = 'http://www.smbs.biz/ExRate/StdExRate.jsp'
             unit = row.get('단위') or ''
-            body.append([_name(row.get('통화'),source),_value(row.get('매매기준율'),unit=unit),_value(row.get('전일대비'),signed=True,unit=unit)])
+            body.append([_name(row.get('통화'),source),_value(row.get('매매기준율'),unit=unit),_value(row.get('전일대비'),signed=True,unit='원')])
         tables.append(_table('fx','환율 ('+_day(day)+')','매매기준율',('통화','기준율','전일 대비'),body))
     for name,kind,title in (('보고용_시장지표','market','시장지표'),('보고용_주가','stocks','주가')):
         for (day,prior),rows in _groups(_records(context,name),'시장일','비교일'):
@@ -299,6 +299,10 @@ def presentation_tables(context):
 
 def equity_table(context):
     caps=_records(context,'보고용_시총') or _latest_caps(_records(context,'증시_시총스냅샷'))
+    if not any(str(cap.get('코드'))=='005490' for cap in caps):
+        # Keep the watchlist entry visible without inventing a rank or observation.
+        caps=[*caps,{'코드':'005490','종목명':'POSCO홀딩스',
+                     '출처':'https://stock.naver.com/domestic/stock/005490/price'}]
     stocks=_records(context,'보고용_주가')
     body=[];stock_days=set()
     for cap in caps:
@@ -316,7 +320,10 @@ def equity_table(context):
         change=_value(stock.get('전일대비'),signed=True,unit='원')
         if _number(stock.get('등락률(%)')) is not None:
             change['text']+=' ('+percentage(stock['등락률(%)'])+')'
-        body.append([_value(cap.get('순위')),_name(cap.get('종목명'),cap.get('출처')),
+        name=_name(cap.get('종목명'),cap.get('출처'))
+        if re.fullmatch(r'[0-9]{6}',code):
+            name['logo']='https://ssl.pstatic.net/imgstock/fn/real/logo/stock/Stock'+code+'.svg'
+        body.append([_value(cap.get('순위')),name,
             _cap_value(cap.get('시가총액'),cap.get('단위')),_value(stock.get('수치'),unit='원'),change])
     cap_days=sorted({str(r['시장일']) for r in caps if r.get('시장일')})
     cap_basis=capture_label(r.get('수집시각') for r in caps)
@@ -338,13 +345,24 @@ def html_tables(context):
     for table in result:
         if table['kind']=='metals':
             table['rows']=order_metal_rows(table['rows'])
-            table['subtitle']='좌우로 다른 품목 보기 · 저장 이력이 있는 품목을 선택하면 가격 추이가 열립니다.'
+            table['subtitle']='저장 이력이 있는 품목은 선택한 줄 아래에서 가격 추이를 볼 수 있습니다.'
         if table['kind']=='market':
             table['rows']=[r for r in table['rows'] if r[0]['text'] not in bond_labels]
         for row in table['rows']:
             row[0]['icon'] = indicator_icon(table['kind'], row[0]['text'])
+            if table['kind']=='metals':
+                rank=metal_priority(row[0]['text'])
+                mark={0:'Ni',1:'Co',2:'LC',3:'Mn',5:'BM'}.get(rank,'')
+                if not mark and any(word in row[0]['text'].casefold() for word in ('구리','copper')):
+                    mark='Cu'
+                row[0]['metal_mark']=mark
     combined=equity_table(context)
     if combined['rows']:result.append(combined)
+    for table in result:
+        for row in table['rows']:
+            for cell in row:
+                if cell.get('css','').endswith('negative') and cell['text'].startswith('-'):
+                    cell['text']='△'+cell['text'][1:].replace('(-','(△')
     return result
 
 
@@ -368,11 +386,12 @@ def metal_priority(name):
 
 
 def order_metal_rows(rows):
-    ordered=sorted(rows,key=lambda row:metal_priority(row[0]['text']))
+    ranks={0:0,1:1,2:2,5:3,3:4,4:5}
+    ordered=sorted(rows,key=lambda row:ranks[metal_priority(row[0]['text'])])
     leaders=[];rest=[];seen=set()
     for row in ordered:
         priority=metal_priority(row[0]['text'])
-        if priority<4 and priority not in seen:
+        if priority not in seen:
             leaders.append(row);seen.add(priority)
         else:rest.append(row)
     return leaders+rest

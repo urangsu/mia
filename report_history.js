@@ -1,27 +1,6 @@
 /* Self-contained stored-observation chart. No fetch, external library or interpolation. */
 (function(){
   'use strict';
-  var rail=document.getElementById('metal-rail'),controls=document.querySelector('.rail-controls');
-  if(rail && controls){
-    var buttons=Array.from(controls.querySelectorAll('[data-rail-step]'));
-    function update(){
-      var end=rail.scrollWidth-rail.clientWidth;
-      controls.hidden=end<2;
-      buttons[0].disabled=rail.scrollLeft<2;
-      buttons[1].disabled=rail.scrollLeft>=end-2;
-    }
-    buttons.forEach(function(button){
-      button.addEventListener('click',function(){
-        var card=rail.querySelector('.metals > tbody > tr:not(.history-row)');
-        var step=card?card.getBoundingClientRect().width+12:rail.clientWidth;
-        rail.scrollBy({left:Number(button.dataset.railStep)*step,
-          behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
-      });
-    });
-    rail.addEventListener('scroll',update,{passive:true});
-    window.addEventListener('resize',update,{passive:true});
-    update();
-  }
   function markLocation(){
     var current=location.hash || '#metals';
     document.querySelectorAll('.report-nav a').forEach(function(link){
@@ -31,17 +10,6 @@
   }
   window.addEventListener('hashchange',markLocation);
   markLocation();
-})();
-(function(){
-  document.querySelectorAll('table.metals').forEach(function(table){
-    var rows=Array.from(table.querySelectorAll(':scope > tbody > .history-row'));
-    if(!rows.length)return;
-    var host=document.createElement('table');host.className='history-host';
-    host.setAttribute('aria-label','선택한 금속 가격 이력');
-    var body=document.createElement('tbody');host.appendChild(body);
-    rows.forEach(function(row){body.appendChild(row);});
-    table.parentElement.insertAdjacentElement('afterend',host);
-  });
 })();
 (function(){
   'use strict';
@@ -57,8 +25,7 @@
     axes.setAttribute('class','history-axis');axes.setAttribute('aria-hidden','true');svg.insertBefore(axes,path);
     var observations=document.createElementNS(ns,'g');observations.setAttribute('class','history-observations');svg.insertBefore(observations,path);
     var readout=row.querySelector('.history-readout'),body=row.querySelector('tbody'),period=row.querySelector('.history-period');
-    var plot=svg.parentElement,tooltip=document.createElement('span'),heading=document.createElement('h3');
-    heading.className='history-title';heading.textContent=(data.name || '가격 추이')+(data.unit?' · '+data.unit:'');row.firstElementChild.prepend(heading);
+    var plot=svg.parentElement,tooltip=document.createElement('span');
     plot.classList.add('history-plot');
     tooltip.className='history-tooltip';tooltip.setAttribute('aria-hidden','true');plot.append(tooltip);
     var first=0,last=1,low=0,high=1,left=72,right=868,width=900,activeMonths=0;
@@ -148,10 +115,23 @@
     }
   }
   var toggles=Array.from(document.querySelectorAll('.history-toggle'));
+  function place(row,button){
+    var grid=button.closest('tbody'),cards=Array.from(grid.children).filter(function(r){return !r.classList.contains('history-row');});
+    var columns=Number(getComputedStyle(grid).getPropertyValue('--metal-columns'))||4;
+    var index=cards.indexOf(button.closest('tr'));
+    var after=cards[Math.min(cards.length-1,Math.ceil((index+1)/columns)*columns-1)];
+    if(after && after.nextElementSibling!==row)after.insertAdjacentElement('afterend',row);
+  }
+  function close(row,button,focus){
+    row.hidden=true;button.setAttribute('aria-expanded','false');
+    if(focus)button.focus();
+  }
   toggles.forEach(function(button){
-    button.addEventListener('click',function(){
-      var row=document.getElementById(button.getAttribute('aria-controls'));
-      if(!row)return;
+    var row=document.getElementById(button.getAttribute('aria-controls'));
+    if(!row)return;
+    row.querySelector('.history-close').addEventListener('click',function(){close(row,button,true);});
+    row.addEventListener('keydown',function(event){if(event.key==='Escape'){event.preventDefault();close(row,button,true);}});
+    button.addEventListener('click',function(event){
       var open=row.hidden;
       toggles.forEach(function(other){
         if(other===button || other.getAttribute('aria-expanded')!=='true')return;
@@ -161,7 +141,17 @@
       });
       row.hidden=!open;
       button.setAttribute('aria-expanded',String(open));
+      if(open)place(row,button);
       if(open && !row.dataset.ready){initialize(row);row.dataset.ready='true';}
+      if(open){
+        var heading=row.querySelector('.history-title');
+        if(event.detail===0)heading.focus({preventScroll:true});
+        var box=heading.getBoundingClientRect();
+        if(box.top<72 || box.bottom>window.innerHeight)heading.scrollIntoView({block:'center'});
+      }
     });
   });
+  window.addEventListener('resize',function(){
+    toggles.forEach(function(button){if(button.getAttribute('aria-expanded')==='true')place(document.getElementById(button.getAttribute('aria-controls')),button);});
+  },{passive:true});
 })();
